@@ -38,6 +38,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	cfgPath := fs.String("config", "", "path to JSON config file")
 	addr := fs.String("addr", "", "listen address (overrides config)")
+	keychain := fs.String("keychain", "", "macOS keychain service holding the API key, used when the key env var is unset")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -56,6 +57,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(stderr, nil))
+	if err := loadKeychainKey(ctx, *keychain, cfg.APIKeyEnv); err != nil {
+		logger.Warn("could not read API key from keychain", "err", err)
+	}
 	if os.Getenv(cfg.APIKeyEnv) == "" {
 		logger.Warn("classifier API key not set; non-prefilter prompts fall back to Tier 2", "env", cfg.APIKeyEnv)
 	}

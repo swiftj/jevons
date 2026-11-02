@@ -1,9 +1,12 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64
-BINARIES := jev-router jev-runner
+BINARIES := jev-router jev-runner jev-hook
+PREFIX ?= $(HOME)/.local
+AGENT_LABEL := com.github.swiftj.jev-router
+AGENT_PLIST := $(HOME)/Library/LaunchAgents/$(AGENT_LABEL).plist
 
-.PHONY: build test cover bench lint vet check release run-router clean
+.PHONY: build test cover bench lint vet check release run-router clean install uninstall install-agent uninstall-agent
 
 build:
 	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o bin/ ./cmd/...
@@ -36,6 +39,26 @@ release:
 		done; \
 	done
 	@cd dist && shasum -a 256 jev-* > SHA256SUMS
+
+install: build
+	install -d $(PREFIX)/bin
+	install -m 0755 $(addprefix bin/,$(BINARIES)) $(PREFIX)/bin/
+
+uninstall: uninstall-agent
+	rm -f $(addprefix $(PREFIX)/bin/,$(BINARIES))
+
+# install-agent runs jev-router at login via launchd (macOS only).
+install-agent: install
+	install -d -m 0700 $(HOME)/.jev
+	install -d $(dir $(AGENT_PLIST))
+	sed -e 's|@BIN@|$(PREFIX)/bin|g' -e 's|@HOME@|$(HOME)|g' -e 's|@LABEL@|$(AGENT_LABEL)|g' \
+		deploy/launchd/jev-router.plist > $(AGENT_PLIST)
+	-launchctl bootout gui/$$(id -u)/$(AGENT_LABEL) 2>/dev/null
+	launchctl bootstrap gui/$$(id -u) $(AGENT_PLIST)
+
+uninstall-agent:
+	-launchctl bootout gui/$$(id -u)/$(AGENT_LABEL) 2>/dev/null
+	rm -f $(AGENT_PLIST)
 
 run-router:
 	go run ./cmd/jev-router

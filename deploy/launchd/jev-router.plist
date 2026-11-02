@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd user agent for jev-router. `make install-agent` fills in @BIN@,
+  @HOME@ and @LABEL@ and loads it; see docs/install.md.
+  The API key comes from the login keychain (service "jev-pro"), never this file.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>@LABEL@</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>@BIN@/jev-router</string>
+		<string>-keychain</string>
+		<string>jev-pro</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>StandardOutPath</key>
+	<string>@HOME@/.jev/jev-router.log</string>
+	<key>StandardErrorPath</key>
+	<string>@HOME@/.jev/jev-router.log</string>
+</dict>
+</plist>

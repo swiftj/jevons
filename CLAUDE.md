@@ -27,15 +27,15 @@ headless `claude -p` runner, and a loopback telemetry server for Claude Mods.
 
 | Task | Command |
 |------|---------|
-| Build | `make build` → `bin/jev-router`, `bin/jev-runner` |
+| Build | `make build` → `bin/jev` (one binary: `router`, `run`, `hook`, `statusline`, `install`, `update`, `doctor`, `uninstall`) |
 | Test (race) | `make test` |
 | Lint | `make lint` (golangci-lint v2) |
 | Full gate | `make check` (vet + lint + race tests) |
 | Coverage | `make cover` |
 | Benchmarks | `make bench` |
-| Release | `make release` → `dist/` cross-compiled + `SHA256SUMS` |
-| Run daemon | `./bin/jev-router` |
-| Run headless skill | `./bin/jev-runner -skill=/cleanup` |
+| Release | `make release` → `dist/jev_darwin_universal`, `jev_linux_{amd64,arm64}` + `SHA256SUMS`; publish by pushing a `v*` tag (`.github/workflows/release.yml`) |
+| Run daemon | `./bin/jev router` |
+| Run headless skill | `./bin/jev run -skill=/cleanup` |
 
 ## Context Map (Progressive Disclosure)
 
@@ -61,7 +61,9 @@ automatically when you touch matching files.
 ## Status
 
 All three waves are complete. Since then: `POST /session` + `POST /usage` feeds (spec 05),
-and `jev-runner` usage reporting + Tier 1 → Tier 2 auto-escalation via `internal/client` (spec 06).
+and `jev run` usage reporting + Tier 1 → Tier 2 auto-escalation via `internal/client` (spec 06),
+the Claude Code hook (`jev hook` / `jev statusline`), and a single `jev` binary that installs and
+updates itself from GitHub Releases (`internal/setup`: keychain key, launchd agent, Claude settings).
 For new work, keep the ownership boundaries below: change `pkg/schema` / `internal/config` /
 `internal/mocks` first, gate, then edit implementation packages in parallel.
 

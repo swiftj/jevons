@@ -1,6 +1,6 @@
 # Daemon API
 
-`jev-router` serves JSON over HTTP on `127.0.0.1:8942`, on the loopback interface only. Request
+The daemon (`jev router`) serves JSON over HTTP on `127.0.0.1:8942`, on the loopback interface only. Request
 bodies are JSON objects of at most 256 KiB. Errors come back as `{"error": "..."}` with a
 suitable status code.
 

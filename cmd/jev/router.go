@@ -1,5 +1,3 @@
-// Command jev-router runs the Jev-Pro routing daemon and its loopback
-// telemetry server for Claude Mods.
 package main
 
 import (
@@ -9,8 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/swiftj/jevons/internal/classifier"
 	"github.com/swiftj/jevons/internal/config"
@@ -20,21 +16,10 @@ import (
 	"github.com/swiftj/jevons/pkg/schema"
 )
 
-var version = "dev"
-
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	err := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
-	stop()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "jev-router:", err)
-		os.Exit(1)
-	}
-}
-
-// run parses flags, wires the daemon, and serves until ctx is cancelled.
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("jev-router", flag.ContinueOnError)
+// runRouter (`jev router`) parses flags, wires the daemon, and serves until
+// ctx is cancelled.
+func runRouter(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("jev router", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	cfgPath := fs.String("config", "", "path to JSON config file")
 	addr := fs.String("addr", "", "listen address (overrides config)")

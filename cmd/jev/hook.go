@@ -1,10 +1,11 @@
-// Command jev-hook connects interactive Claude Code sessions to the jev-router
-// daemon. As a UserPromptSubmit hook it routes each prompt and shows the
-// suggested tier; with -statusline it prints that suggestion next to the
-// session's current model. Hooks cannot switch models, so it only advises.
+// `jev hook` connects interactive Claude Code sessions to the daemon. As a
+// UserPromptSubmit hook it routes each prompt and shows the suggested tier;
+// `jev statusline` prints that suggestion next to the session's current
+// model. Hooks cannot switch models, so it only advises.
 //
 // It never blocks a prompt: any failure (daemon down, bad input) exits 0
 // with no output.
+
 package main
 
 import (
@@ -26,8 +27,6 @@ import (
 	"github.com/swiftj/jevons/pkg/schema"
 )
 
-var version = "dev"
-
 const (
 	// maxInputBytes caps the hook JSON read from stdin.
 	maxInputBytes = 1 << 20
@@ -37,14 +36,6 @@ const (
 
 // safeID matches session IDs usable as file names.
 var safeID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
-
-func main() {
-	code, err := run(context.Background(), os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "jev-hook:", err)
-	}
-	os.Exit(code)
-}
 
 // hookInput is the subset of Claude Code hook / status line stdin jev-hook reads.
 type hookInput struct {
@@ -63,7 +54,7 @@ type suggestion struct {
 	Source schema.DecisionSource `json:"source"`
 }
 
-func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
+func runHook(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 	fs := flag.NewFlagSet("jev-hook", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	statusline := fs.Bool("statusline", false, "print a status line instead of routing a prompt")

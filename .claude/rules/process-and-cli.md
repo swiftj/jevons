@@ -2,6 +2,7 @@
 paths:
   - "cmd/**"
   - "internal/runner/**"
+  - "internal/setup/**"
 ---
 # Process Execution & CLI Rules
 

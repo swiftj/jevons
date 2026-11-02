@@ -46,10 +46,10 @@ func fakeDaemon(t *testing.T, model string) (addr string, calls *atomic.Int32) {
 	return strings.TrimPrefix(srv.URL, "http://"), calls
 }
 
-func runHook(t *testing.T, args []string, stdin string) (int, string, error) {
+func hookCmd(t *testing.T, args []string, stdin string) (int, string, error) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code, err := run(context.Background(), args, strings.NewReader(stdin), &out, &errOut)
+	code, err := runHook(context.Background(), args, strings.NewReader(stdin), &out, &errOut)
 	return code, out.String(), err
 }
 
@@ -58,7 +58,7 @@ func TestPromptHookRoutesAndStores(t *testing.T) {
 	haiku := testConfig(t).Models[schema.Tier1]
 	addr, calls := fakeDaemon(t, haiku)
 	dir := t.TempDir()
-	code, out, err := runHook(t, []string{"-addr", addr, "-state-dir", dir},
+	code, out, err := hookCmd(t, []string{"-addr", addr, "-state-dir", dir},
 		`{"session_id":"sess-1","prompt":"/cleanup secret-prompt-text"}`)
 	if code != 0 || err != nil {
 		t.Fatalf("code=%d err=%v", code, err)
@@ -112,7 +112,7 @@ func TestPromptHookSilentCases(t *testing.T) {
 	}
 	for _, tc := range cases {
 		dir := t.TempDir()
-		code, out, err := runHook(t, []string{"-addr", tc.addr, "-state-dir", dir, "-timeout", "2s"}, tc.stdin)
+		code, out, err := hookCmd(t, []string{"-addr", tc.addr, "-state-dir", dir, "-timeout", "2s"}, tc.stdin)
 		if code != 0 || (out != "") != tc.wantOut || (err != nil) != tc.wantErr {
 			t.Errorf("%s: code=%d out=%q err=%v", tc.name, code, out, err)
 		}
@@ -143,7 +143,7 @@ func TestStatusline(t *testing.T) {
 		{"unsafe id", `{"session_id":"../sess-1"}`, "Jev: –"},
 	}
 	for _, tc := range cases {
-		code, out, err := runHook(t, []string{"-statusline", "-state-dir", dir}, tc.stdin)
+		code, out, err := hookCmd(t, []string{"-statusline", "-state-dir", dir}, tc.stdin)
 		if code != 0 || err != nil || out != tc.want+"\n" {
 			t.Errorf("%s: code=%d err=%v out=%q want %q", tc.name, code, err, out, tc.want)
 		}
@@ -181,13 +181,13 @@ func TestPruneStale(t *testing.T) {
 
 func TestFlagsAndConfig(t *testing.T) {
 	t.Parallel()
-	if code, out, err := runHook(t, []string{"-version"}, ""); code != 0 || err != nil || out != "dev\n" {
+	if code, out, err := hookCmd(t, []string{"-version"}, ""); code != 0 || err != nil || out != "dev\n" {
 		t.Errorf("-version: %d %q %v", code, out, err)
 	}
-	if code, _, err := runHook(t, []string{"-nope"}, ""); code != 1 || err == nil {
+	if code, _, err := hookCmd(t, []string{"-nope"}, ""); code != 1 || err == nil {
 		t.Errorf("bad flag: %d %v", code, err)
 	}
-	if code, _, err := runHook(t, []string{"-config", "/does/not/exist.json"}, "{}"); code != 0 || err == nil {
+	if code, _, err := hookCmd(t, []string{"-config", "/does/not/exist.json"}, "{}"); code != 0 || err == nil {
 		t.Errorf("bad config: %d %v", code, err)
 	}
 	if got := tierLabel("weird"); got != "weird" {

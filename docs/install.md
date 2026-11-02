@@ -1,80 +1,140 @@
-# Install and run
+# Install, update and uninstall
 
-This page takes you from a clone to an always-on daemon on macOS. Linux works for the
-binaries, but the launchd agent and keychain steps are macOS-only.
+Jev ships as one binary, `jev`, published on
+[GitHub Releases](https://github.com/swiftj/jevons/releases). macOS gets a single universal
+file that runs on both Apple silicon and Intel. Linux gets `amd64` and `arm64` builds. The
+keychain and launchd steps are macOS-only.
 
-## 1. Build and install the binaries
-
-```bash
-make install            # builds, then copies jev-router, jev-runner, jev-hook to ~/.local/bin
-```
-
-Install somewhere else with `make install PREFIX=/usr/local`. Make sure `$PREFIX/bin` is on
-your `PATH`:
+## Install (one line)
 
 ```bash
-command -v jev-router jev-runner jev-hook
+curl -fsSL https://raw.githubusercontent.com/swiftj/jevons/main/install.sh | sh
 ```
 
-| Binary | What it is |
-|--------|-----------|
-| `jev-router` | The daemon. Routes prompts and serves the loopback API on `127.0.0.1:8942`. |
-| `jev-runner` | Runs a skill headlessly with `claude -p`, using the daemon to pick the model. |
-| `jev-hook` | Claude Code hook and status line. Shows which tier Jev would pick. |
+The script downloads the latest release for your platform, checks its SHA-256 against the
+release's `SHA256SUMS`, and runs `jev install`. That command goes through these steps:
 
-## 2. Put the API key in the keychain
+1. **Binary.** Copies `jev` to `~/.local/bin/jev`. If that directory isn't on your `PATH`,
+   it prints the line to add to `~/.zshrc`.
+2. **API key.** If the keychain already has the key (service `jev-pro`), it keeps it.
+   Otherwise it offers to store `$ANTHROPIC_API_KEY`, or prompts for the key with input
+   hidden. Press Enter to skip. The key goes to `security` on stdin, so it never shows up in a
+   process list, a file or a log.
+3. **Daemon.** Writes the launchd agent
+   `~/Library/LaunchAgents/com.github.swiftj.jev-router.plist`, which runs
+   `jev router -keychain jev-pro`. It loads the agent and waits for `/healthz` to answer. The
+   daemon then starts at every login and restarts if it exits. Its log is
+   `~/.jev/jev-router.log`.
+4. **Claude Code.** Shows the changes it plans for `~/.claude/settings.json`: a
+   `UserPromptSubmit` hook running `jev hook` and a status line running `jev statusline`. It
+   asks `[Y/n]` before writing. The old file is kept as `settings.json.jev-backup`, and keys in
+   the rewritten file are sorted. If you already have a status line, it is left alone, and
+   `jev install` tells you how to add Jev to it.
 
-The daemon's classifier calls the Anthropic Messages API. An agent started by launchd does not
-read `~/.zshrc`, so it gets the key from the login keychain instead. Store it once, under the
-service name `jev-pro`:
+Re-running `jev install` is safe. Steps that are already done are reported as such.
+
+**Options.** Pin a version with `JEV_VERSION`. Pass flags to `jev install` after `sh -s --`.
+For example, an unattended install of a fixed version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/swiftj/jevons/main/install.sh | JEV_VERSION=v0.1.0 sh -s -- -yes
+```
+
+| `jev install` flag | Meaning |
+|--------------------|---------|
+| `-yes` | Accept every prompt. Doesn't prompt for a key, but still stores `$ANTHROPIC_API_KEY` if set. |
+| `-no-agent` | Don't install the launchd agent. |
+| `-no-settings` | Leave Claude Code settings alone. |
+| `-bin-dir DIR` | Install somewhere other than `~/.local/bin` (or set `JEV_BIN_DIR`). |
+| `-config FILE` | Read the daemon address and key variable name from a [config file](configuration.md). |
+
+Then check everything:
+
+```bash
+jev doctor
+```
+
+### Other ways to get the binary
+
+- **Manual download.** Get `jev_darwin_universal` (or `jev_linux_amd64` / `jev_linux_arm64`)
+  and `SHA256SUMS` from the release page, check the hash, then run
+  `chmod +x jev_darwin_universal && ./jev_darwin_universal install`. Browsers mark downloaded
+  files as quarantined, and Gatekeeper then refuses to run the unsigned binary. Clear the flag
+  with `xattr -d com.apple.quarantine jev_darwin_universal`, or use `curl`, which doesn't set it.
+- **From source** (needs Go 1.22+):
+
+  ```bash
+  make install
+  ```
+
+  This builds `bin/jev` and runs `bin/jev install`.
+
+### Verifying a release
+
+Every release binary carries a GitHub build provenance attestation. It shows the binary was
+built by this repository's release workflow:
+
+```bash
+gh attestation verify ~/.local/bin/jev --repo swiftj/jevons
+```
+
+## Update
+
+```bash
+jev update            # install the latest release if it is newer
+```
+
+```bash
+jev update -check     # only report whether one is available
+```
+
+```bash
+jev update -force     # reinstall the latest release even if current
+```
+
+`jev update` goes through these steps:
+1. Downloads the latest release for your platform and checks its SHA-256.
+2. Runs the new binary's `version` to make sure it starts.
+3. Swaps it into place, keeping the old binary as `~/.local/bin/jev.prev`.
+4. If the launchd agent is loaded, restarts the daemon. If the daemon doesn't answer within
+   10 seconds, puts the previous binary back and restarts again.
+
+A checksum mismatch stops the update before anything changes. `jev doctor` also tells you
+when a newer release is out.
+
+## Put the API key in the keychain by hand
+
+`jev install` normally does this. To store or rotate the key yourself:
 
 ```bash
 security add-generic-password -a "$USER" -s jev-pro -T /usr/bin/security -U -w
 ```
 
 `-w` with no value makes `security` prompt for the key, so it stays out of your shell
-history. `-U` updates an existing item, so the same command rotates the key.
-
-Check it is there without printing it:
+history. `-U` replaces an existing item. Check that the item exists without printing it:
 
 ```bash
 security find-generic-password -s jev-pro >/dev/null && echo stored
 ```
 
-`jev-router -keychain jev-pro` reads this item only when `ANTHROPIC_API_KEY` is not already
-set. The key is never written to a file, a log, or an error message. If the lookup fails, the
-daemon logs a warning and keeps running. Slash commands and mechanical prefixes still route to
-Tier 1, and everything else falls back to Tier 2.
-
-## 3. Start the daemon at login
+`jev router -keychain jev-pro` reads the item only when `ANTHROPIC_API_KEY` is not already
+set. If the lookup fails, the daemon logs a warning and keeps running. Slash commands and
+mechanical prefixes still route to Tier 1, and everything else falls back to Tier 2. After
+changing the key, restart the daemon:
 
 ```bash
-make install-agent
+launchctl kickstart -k gui/$(id -u)/com.github.swiftj.jev-router
 ```
 
-This installs the binaries and writes
-`~/Library/LaunchAgents/com.github.swiftj.jev-router.plist` from
-[`deploy/launchd/jev-router.plist`](../deploy/launchd/jev-router.plist). Then it loads the agent.
-launchd starts the daemon now and at every login, and restarts it if it exits. Its log goes to
-`~/.jev/jev-router.log`.
+## Using a config file with the daemon
 
-Check it:
-
-```bash
-curl -s 127.0.0.1:8942/healthz
-```
-
-```bash
-launchctl print gui/$(id -u)/com.github.swiftj.jev-router | grep -E 'state|pid'
-```
-
-### Using a config file with the agent
-
-The agent runs `jev-router -keychain jev-pro` with default settings. To use a
-[config file](configuration.md), add it to the installed plist's `ProgramArguments`. launchd
-does not expand `~`, so give the full path:
+The agent runs `jev router -keychain jev-pro` with default settings. To use a
+[config file](configuration.md), add it to `ProgramArguments` in
+`~/Library/LaunchAgents/com.github.swiftj.jev-router.plist`, right after `router`. launchd
+doesn't expand `~`, so give the full path:
 
 ```xml
+<string>router</string>
 <string>-config</string>
 <string>/Users/you/.jev/config.json</string>
 ```
@@ -89,50 +149,23 @@ launchctl bootout gui/$(id -u)/com.github.swiftj.jev-router
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.github.swiftj.jev-router.plist
 ```
 
-`make install-agent` rewrites the plist from the template, so you have to add the edit again
-after each upgrade.
-
-## 4. Connect Claude Code
-
-See [Daily use](daily-use.md) for the hook and status line.
-
-## Upgrade
-
-```bash
-git pull
-```
-
-```bash
-make check && make install-agent
-```
-
-`install-agent` replaces the binaries and restarts the daemon. Check the version afterwards:
-
-```bash
-jev-router -version
-```
+`jev install` rewrites the plist, so add the edit again after re-running it.
 
 ## Run in the foreground instead
 
-For a quick try without launchd, run it in a terminal. It reads `ANTHROPIC_API_KEY` from
-your shell:
+For a quick try without launchd, run the daemon in a terminal. It reads `ANTHROPIC_API_KEY`
+from your shell:
 
 ```bash
-jev-router
+jev router
 ```
 
 ## Uninstall
 
 ```bash
-make uninstall           # stops and removes the agent, then removes the binaries
+jev uninstall
 ```
 
-To remove the key and Jev's state as well:
-
-```bash
-security delete-generic-password -s jev-pro
-```
-
-```bash
-rm -rf ~/.jev
-```
+This stops the daemon and removes the launchd agent. It removes Jev's hook and status line
+from Claude Code settings after asking, then deletes `~/.local/bin/jev` and `jev.prev`. Add
+`-purge` to also delete the keychain item and `~/.jev`. Add `-yes` to skip the question.

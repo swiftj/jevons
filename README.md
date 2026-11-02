@@ -1,9 +1,14 @@
 # Jev-Pro
 
-A compiled Go router that picks the cheapest capable Claude model tier for each prompt. It
-comes with a headless `claude -p` runner, a Claude Code hook, and a loopback telemetry server
-for Claude Mods.
+Jev picks the cheapest capable Claude model tier for each prompt. It is one Go binary, `jev`,
+which contains:
+- the routing daemon
+- a headless `claude -p` runner
+- a Claude Code hook and status line
+- a loopback telemetry server for Claude Mods
+- its own installer and updater
 
+How it decides:
 - **Zero-cost pre-filter.** Slash commands (`/cleanup`, `/grammar`, `/format`, `/calibrate`)
   and mechanical prefixes (`fix typo:`, `format json:`, …) route to Tier 1 locally in under a
   microsecond.
@@ -11,35 +16,46 @@ for Claude Mods.
   If that call fails, the router falls back to Tier 2.
 - **Cache-warmth reuse**, **quota throttling** (5h / 7d windows at 80%), and **Tier 1 → Tier 2
   escalation** for failed headless runs.
-- Pure Go, standard library only, no Python.
+
+It is pure Go, uses only the standard library, and has no Python.
 
 ## Quick start (macOS)
 
 ```bash
-make install                                                          # → ~/.local/bin
-security add-generic-password -a "$USER" -s jev-pro -T /usr/bin/security -U -w   # paste your API key
-make install-agent                                                    # run jev-router at login
-curl -s 127.0.0.1:8942/healthz
+curl -fsSL https://raw.githubusercontent.com/swiftj/jevons/main/install.sh | sh
 ```
 
-Then add the hook and status line to `~/.claude/settings.json` (see
-[Daily use](docs/daily-use.md#claude-code-hook-and-status-line)), and run skills headlessly with:
+This downloads the latest release, checks its SHA-256 and runs `jev install`, which does the
+following:
+- installs `jev` to `~/.local/bin`
+- stores your API key in the keychain
+- starts the daemon at login
+- adds the hook and status line to Claude Code after asking you
+
+Then check the setup:
 
 ```bash
-jev-runner -skill=/cleanup -prompt="tidy the README" -route
+jev doctor
+```
+
+Update later with `jev update`. Run skills headlessly with:
+
+```bash
+jev run -skill=/cleanup -prompt="tidy the README" -route
 ```
 
 ## Documentation
 
 | Page | Covers |
 |------|--------|
-| [Install and run](docs/install.md) | Build, keychain key, launchd agent, upgrade, uninstall |
-| [Daily use](docs/daily-use.md) | How tiers are chosen, Claude Code hook and status line, `jev-runner`, feeding usage |
+| [Install, update and uninstall](docs/install.md) | One-line install, `jev install` / `update` / `uninstall`, keychain, launchd, verifying releases |
+| [Daily use](docs/daily-use.md) | How tiers are chosen, Claude Code hook and status line, `jev run`, feeding usage |
 | [Configuration](docs/configuration.md) | Config file, `JEV_*` variables, flags, choosing capacities |
 | [Daemon API](docs/endpoints.md) | Endpoints, decision and status formats, error codes |
-| [Troubleshooting](docs/troubleshooting.md) | Diagnosing problems, maintenance, development commands |
+| [Troubleshooting](docs/troubleshooting.md) | `jev doctor`, diagnosing problems, maintenance, cutting a release |
 
 ## Development
 
-`make check` (vet + golangci-lint + race tests), `make cover`, `make bench`, `make release`.
+`make check` runs vet, golangci-lint and race tests. `make cover`, `make bench` and
+`make release` are also available. `make install` builds from source and runs `jev install`.
 See [`CLAUDE.md`](CLAUDE.md) and [`specs/`](specs/) for the architecture.

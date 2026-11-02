@@ -2,13 +2,13 @@
 
 Jev helps in two ways:
 
-- **Interactive Claude Code sessions: it advises.** `jev-hook` routes each prompt you type and
+- **Interactive Claude Code sessions: it advises.** `jev hook` routes each prompt you type and
   shows the tier Jev would pick. Hooks cannot change the model, so you switch with `/model`
   when the suggestion is worth it.
-- **Headless runs: it decides.** `jev-runner -route` asks the daemon for a model, runs
+- **Headless runs: it decides.** `jev run -route` asks the daemon for a model, runs
   `claude -p` with it, reports token usage, and retries a failed Tier 1 run on Tier 2.
 
-Both need the daemon running (see [Install](install.md)).
+Both need the daemon running. `jev install` sets that up; see [Install](install.md).
 
 ## How Jev picks a tier
 
@@ -37,17 +37,18 @@ The `source` in each decision (`prefilter`, `cache_warm`, `classifier`, `throttl
 
 ## Claude Code: hook and status line
 
-Add this to `~/.claude/settings.json` (or a project's `.claude/settings.json`). Use the full
-path to `jev-hook`, which is `~/.local/bin/jev-hook` after `make install`:
+`jev install` adds both to `~/.claude/settings.json` for you, after showing the change and
+asking. To set them up by hand, or in a project's `.claude/settings.json`, use the full path
+to the installed binary:
 
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "/Users/you/.local/bin/jev-hook", "timeout": 10 } ] }
+      { "hooks": [ { "type": "command", "command": "/Users/you/.local/bin/jev hook", "timeout": 10 } ] }
     ]
   },
-  "statusLine": { "type": "command", "command": "/Users/you/.local/bin/jev-hook -statusline" }
+  "statusLine": { "type": "command", "command": "/Users/you/.local/bin/jev statusline" }
 }
 ```
 
@@ -67,7 +68,7 @@ are actually using:
 | `Jev: –` | No suggestion yet for this session, or the daemon is not running. |
 
 The status line command can only be one command. If you already have a status line script,
-call `jev-hook -statusline` from it and pass its stdin along.
+call `jev statusline` from it and pass its stdin along.
 
 **What it costs.** A prompt that the pre-filter doesn't catch costs one classifier call to
 the Tier 1 model. That call is a few hundred tokens and can delay your prompt by up to 3 s.
@@ -79,10 +80,10 @@ and also lets the prompt through. The hook stores only the tier, model and sourc
 session, never the prompt. That data sits in `~/.jev/hook/` (mode 0600), and files older than
 7 days are pruned.
 
-## Headless runs with jev-runner
+## Headless runs with jev run
 
 ```bash
-jev-runner -skill=/cleanup -prompt="tidy the README" -route
+jev run -skill=/cleanup -prompt="tidy the README" -route
 ```
 
 The model comes from the first of these that applies: `-model` (an explicit ID), then
@@ -102,7 +103,7 @@ is down), and finally the `claude` CLI's own default.
 | `-notify` | on | Desktop notification when the run finishes (✓ or ✗) |
 | `-config` | | JSON config file |
 
-`jev-runner` writes one log per run to `~/.jev/logs/` (mode 0600, keeps the last 200) and
+`jev run` writes one log per run to `~/.jev/logs/` (mode 0600, keeps the last 200) and
 exits with `claude`'s exit code.
 
 **Escalation** happens only when `-route` picked a Tier 1 model and the run failed (a non-zero
@@ -114,7 +115,7 @@ The total feeds the quota throttle. It is skipped quietly when the daemon is not
 
 ## Feeding the throttle and cache-warmth rules
 
-The daemon only knows what clients tell it. `jev-runner` reports usage automatically.
+The daemon only knows what clients tell it. `jev run` reports usage automatically.
 Interactive sessions report nothing, so nothing counts toward the throttle unless you send it
 yourself:
 

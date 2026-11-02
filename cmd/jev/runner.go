@@ -1,6 +1,7 @@
-// Command jev-runner executes a headless `claude -p` skill run, optionally
-// asking the jev-router daemon which model to use, reporting token usage back
-// to it, and retrying once on Tier 2 when a routed Tier 1 run fails.
+// `jev run` executes a headless `claude -p` skill run, optionally asking the
+// daemon which model to use, reporting token usage back to it, and retrying
+// once on Tier 2 when a routed Tier 1 run fails.
+
 package main
 
 import (
@@ -9,10 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/swiftj/jevons/internal/client"
@@ -21,16 +19,6 @@ import (
 	"github.com/swiftj/jevons/pkg/schema"
 )
 
-var version = "dev"
-
-func main() {
-	code, err := run(os.Args[1:], os.Stdout, os.Stderr)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "jev-runner:", err)
-	}
-	os.Exit(code)
-}
-
 // options are the parsed command-line flags.
 type options struct {
 	skill, prompt, model, tier, dir, cfgPath string
@@ -38,7 +26,7 @@ type options struct {
 	route, notify, report, escalate          bool
 }
 
-func run(args []string, stdout, stderr io.Writer) (int, error) {
+func runRunner(ctx context.Context, args []string, stdout, stderr io.Writer) (int, error) {
 	fs := flag.NewFlagSet("jev-runner", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var o options
@@ -69,9 +57,6 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	var ropt runner.Options
 	if o.notify {

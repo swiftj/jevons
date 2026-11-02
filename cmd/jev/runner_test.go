@@ -214,16 +214,16 @@ func TestResolveModel(t *testing.T) {
 func TestRunFlags(t *testing.T) {
 	t.Parallel()
 	var out, errOut bytes.Buffer
-	if code, err := run([]string{"-version"}, &out, &errOut); code != 0 || err != nil || out.String() != "dev\n" {
+	if code, err := runRunner(context.Background(), []string{"-version"}, &out, &errOut); code != 0 || err != nil || out.String() != "dev\n" {
 		t.Errorf("-version: %d %v %q", code, err, out.String())
 	}
-	if code, err := run(nil, &out, &errOut); code != 2 || err == nil {
+	if code, err := runRunner(context.Background(), nil, &out, &errOut); code != 2 || err == nil {
 		t.Errorf("missing skill: %d %v", code, err)
 	}
-	if code, _ := run([]string{"-nope"}, &out, &errOut); code != 2 {
+	if code, _ := runRunner(context.Background(), []string{"-nope"}, &out, &errOut); code != 2 {
 		t.Errorf("bad flag: %d", code)
 	}
-	if code, _ := run([]string{"-skill=/s", "-config=/does/not/exist.json"}, &out, &errOut); code != 1 {
+	if code, _ := runRunner(context.Background(), []string{"-skill=/s", "-config=/does/not/exist.json"}, &out, &errOut); code != 1 {
 		t.Errorf("bad config: %d", code)
 	}
 }

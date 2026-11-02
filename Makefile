@@ -1,15 +1,13 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64
-BINARIES := jev-router jev-runner jev-hook
 PREFIX ?= $(HOME)/.local
-AGENT_LABEL := com.github.swiftj.jev-router
-AGENT_PLIST := $(HOME)/Library/LaunchAgents/$(AGENT_LABEL).plist
+SHASUM := $(shell command -v shasum >/dev/null 2>&1 && echo "shasum -a 256" || echo sha256sum)
 
-.PHONY: build test cover bench lint vet check release run-router clean install uninstall install-agent uninstall-agent
+.PHONY: build test cover bench lint vet check release run-router clean install uninstall
 
 build:
-	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o bin/ ./cmd/...
+	go build -trimpath -ldflags "-X main.version=$(VERSION)" -o bin/jev ./cmd/jev
 
 test:
 	go test -race -count=1 ./...
@@ -28,40 +26,32 @@ vet:
 
 check: vet lint test
 
+# release cross-compiles dist/jev_<os>_<arch>. Where lipo exists (macOS), the two
+# darwin builds become one dist/jev_darwin_universal.
 release:
 	@rm -rf dist && mkdir -p dist
 	@for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; \
-		for b in $(BINARIES); do \
-			echo "build $$b $$os/$$arch"; \
-			CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" \
-				-o dist/$${b}_$${os}_$${arch} ./cmd/$$b || exit 1; \
-		done; \
+		echo "build jev $$os/$$arch"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" \
+			-o dist/jev_$${os}_$${arch} ./cmd/jev || exit 1; \
 	done
-	@cd dist && shasum -a 256 jev-* > SHA256SUMS
+	@if command -v lipo >/dev/null 2>&1; then \
+		echo "lipo jev_darwin_universal"; \
+		lipo -create -output dist/jev_darwin_universal dist/jev_darwin_arm64 dist/jev_darwin_amd64 && \
+		rm dist/jev_darwin_arm64 dist/jev_darwin_amd64; \
+	fi
+	@cd dist && $(SHASUM) jev_* > SHA256SUMS
 
+# install runs `jev install`: binary, keychain key, launchd agent, Claude Code wiring.
 install: build
-	install -d $(PREFIX)/bin
-	install -m 0755 $(addprefix bin/,$(BINARIES)) $(PREFIX)/bin/
+	./bin/jev install -bin-dir $(PREFIX)/bin
 
-uninstall: uninstall-agent
-	rm -f $(addprefix $(PREFIX)/bin/,$(BINARIES))
-
-# install-agent runs jev-router at login via launchd (macOS only).
-install-agent: install
-	install -d -m 0700 $(HOME)/.jev
-	install -d $(dir $(AGENT_PLIST))
-	sed -e 's|@BIN@|$(PREFIX)/bin|g' -e 's|@HOME@|$(HOME)|g' -e 's|@LABEL@|$(AGENT_LABEL)|g' \
-		deploy/launchd/jev-router.plist > $(AGENT_PLIST)
-	-launchctl bootout gui/$$(id -u)/$(AGENT_LABEL) 2>/dev/null
-	launchctl bootstrap gui/$$(id -u) $(AGENT_PLIST)
-
-uninstall-agent:
-	-launchctl bootout gui/$$(id -u)/$(AGENT_LABEL) 2>/dev/null
-	rm -f $(AGENT_PLIST)
+uninstall:
+	./bin/jev uninstall -bin-dir $(PREFIX)/bin
 
 run-router:
-	go run ./cmd/jev-router
+	go run ./cmd/jev router
 
 clean:
 	rm -rf bin dist coverage.out

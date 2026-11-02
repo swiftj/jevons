@@ -71,7 +71,7 @@ func TestDaemonEndToEnd(t *testing.T) {
 	defer cancel()
 	logs := &syncBuffer{}
 	done := make(chan error, 1)
-	go func() { done <- run(ctx, []string{"-addr", addr}, &bytes.Buffer{}, logs) }()
+	go func() { done <- runRouter(ctx, []string{"-addr", addr}, &bytes.Buffer{}, logs) }()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for {
@@ -128,16 +128,16 @@ func TestDaemonEndToEnd(t *testing.T) {
 func TestRunFlagsAndErrors(t *testing.T) {
 	ctx := context.Background()
 	var out, errOut bytes.Buffer
-	if err := run(ctx, []string{"-version"}, &out, &errOut); err != nil || out.String() != "dev\n" {
+	if err := runRouter(ctx, []string{"-version"}, &out, &errOut); err != nil || out.String() != "dev\n" {
 		t.Errorf("-version: %v %q", err, out.String())
 	}
-	if err := run(ctx, []string{"-nope"}, &out, &errOut); err == nil {
+	if err := runRouter(ctx, []string{"-nope"}, &out, &errOut); err == nil {
 		t.Error("bad flag: expected error")
 	}
-	if err := run(ctx, []string{"-config", "/does/not/exist.json"}, &out, &errOut); err == nil {
+	if err := runRouter(ctx, []string{"-config", "/does/not/exist.json"}, &out, &errOut); err == nil {
 		t.Error("bad config: expected error")
 	}
-	if err := run(ctx, []string{"-addr", "0.0.0.0:0"}, &out, &errOut); !errors.Is(err, proxy.ErrNonLoopback) {
+	if err := runRouter(ctx, []string{"-addr", "0.0.0.0:0"}, &out, &errOut); !errors.Is(err, proxy.ErrNonLoopback) {
 		t.Errorf("non-loopback: %v", err)
 	}
 }

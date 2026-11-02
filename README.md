@@ -47,7 +47,7 @@ It runs `claude -p --output-format json`, so it also:
 | Method & path | Body | Returns |
 |---------------|------|---------|
 | `GET /healthz` | — | `{"ok":true}` |
-| `GET /status` | — | routing counts, usage windows, warm sessions, throttle flag |
+| `GET /status` | — | routing counts, usage windows, warm sessions, throttle flag, classifier error count and last error |
 | `POST /route` | `{"prompt", "task_id"?, "session_id"?, "essential"?}` | routing decision |
 | `POST /escalate` | `{"decision": <decision>, "cause": "..."}` | Tier 2 decision |
 | `POST /session` | `{"session_id", "model", "cached_tokens", "last_activity"?}` | `{"ok":true}` |

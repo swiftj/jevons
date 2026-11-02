@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -222,7 +223,7 @@ func TestNilDeps(t *testing.T) {
 		t.Errorf("decision = %+v", d)
 	}
 	s := e.Status(context.Background())
-	if s.RoutedTotal != 1 || s.WarmSessions == nil || s.Usage == nil {
+	if s.RoutedTotal != 1 || s.WarmSessions == nil || s.Usage == nil || s.ClassifierErrors != 0 {
 		t.Errorf("status = %+v", s)
 	}
 }
@@ -492,5 +493,53 @@ func BenchmarkRouteClassifier(b *testing.B) {
 		if _, err := e.Route(ctx, req); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// syncBuffer is a goroutine-safe slog sink.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestClassifierFailuresSurfaced(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	logs := &syncBuffer{}
+	f.engine = New(f.cfg, Deps{Classifier: f.cls, Clock: f.clock, Logger: slog.New(slog.NewJSONHandler(logs, nil))})
+	ctx := context.Background()
+
+	f.cls.Err = errors.New("classifier: http status 400 (invalid_request_error)")
+	if _, err := f.engine.Route(ctx, schema.RouteRequest{Prompt: "secret prompt text", TaskID: "t1"}); err != nil {
+		t.Fatal(err)
+	}
+	f.cls.Err = nil
+	f.cls.Decision = schema.RoutingDecision{TaskTier: "TIER_9"}
+	if _, err := f.engine.Route(ctx, schema.RouteRequest{Prompt: "x", TaskID: "t2"}); err != nil {
+		t.Fatal(err)
+	}
+
+	s := f.engine.Status(ctx)
+	if s.ClassifierErrors != 2 || !strings.Contains(s.LastClassifierError, "TIER_9") {
+		t.Errorf("status = %+v", s)
+	}
+	out := logs.String()
+	if strings.Count(out, "classifier failed") != 2 || !strings.Contains(out, "invalid_request_error") || !strings.Contains(out, `"task_id":"t1"`) {
+		t.Errorf("logs = %s", out)
+	}
+	if strings.Contains(out, "secret prompt text") || strings.Contains(s.LastClassifierError, "secret prompt text") {
+		t.Error("prompt leaked")
 	}
 }

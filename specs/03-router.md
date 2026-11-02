@@ -34,6 +34,9 @@ Evaluate in this exact order; first terminal step wins.
    `SessionID` set. Rationale: reusing warm cache beats a cold cheaper model.
 4. **Classify** — `Classifier.Classify`. On error: fall back to `Tier2` with
    `Rationale="classifier_unavailable"` (fail safe toward capability, not toward cost).
+   Each failure (error or invalid decision) increments `StatusSnapshot.ClassifierErrors`, sets
+   `LastClassifierError` (truncated to 120 runes), and logs a warning via `Deps.Logger` with the
+   task ID — never the prompt.
 5. **Quota throttle** — fetch `Usage.Windows`. If any window `Ratio() >= cfg.QuotaThreshold`
    and the decision is `Tier2` and `!req.Essential`, downgrade to `Tier1`, set
    `Source=SourceThrottle`, append `"; throttled:<window>"` to rationale. Tier 3 is **never**

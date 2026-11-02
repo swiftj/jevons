@@ -124,14 +124,18 @@ func (w UsageWindow) Ratio() float64 {
 
 // StatusSnapshot is a point-in-time copy of router telemetry.
 type StatusSnapshot struct {
-	Uptime       string                   `json:"uptime"`
-	RoutedTotal  int64                    `json:"routed_total"`
-	BySource     map[DecisionSource]int64 `json:"by_source"`
-	ByTier       map[Tier]int64           `json:"by_tier"`
-	Usage        []UsageWindow            `json:"usage"`
-	UsageErrors  int64                    `json:"usage_errors"`
-	WarmSessions []SessionState           `json:"warm_sessions"`
-	Throttled    bool                     `json:"throttled"`
+	Uptime      string                   `json:"uptime"`
+	RoutedTotal int64                    `json:"routed_total"`
+	BySource    map[DecisionSource]int64 `json:"by_source"`
+	ByTier      map[Tier]int64           `json:"by_tier"`
+	Usage       []UsageWindow            `json:"usage"`
+	UsageErrors int64                    `json:"usage_errors"`
+	// ClassifierErrors counts classifier failures that fell back to Tier 2.
+	ClassifierErrors int64 `json:"classifier_errors"`
+	// LastClassifierError is the most recent classifier failure (never contains prompt text).
+	LastClassifierError string         `json:"last_classifier_error,omitempty"`
+	WarmSessions        []SessionState `json:"warm_sessions"`
+	Throttled           bool           `json:"throttled"`
 }
 
 // RunRequest describes a headless `claude -p` invocation.

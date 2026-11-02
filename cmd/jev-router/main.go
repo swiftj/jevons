@@ -73,6 +73,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		Sessions:   sessions,
 		Usage:      usage,
 		Clock:      clock,
+		Logger:     logger,
 	})
 
 	logger.Info("jev-router starting", "version", version, "addr", cfg.ListenAddr)

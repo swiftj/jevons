@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -43,13 +45,15 @@ var _ schema.Router = (*Engine)(nil)
 // Deps are the injected collaborators of the Engine. Any of Prefilter,
 // Classifier, Sessions, or Usage may be nil, in which case that pipeline step
 // is skipped (a nil Classifier triggers the Tier 2 fallback). A nil Clock
-// defaults to schema.SystemClock.
+// defaults to schema.SystemClock and a nil Logger discards.
 type Deps struct {
 	Prefilter  schema.Prefilter
 	Classifier schema.Classifier
 	Sessions   schema.SessionTracker
 	Usage      schema.UsageSource
 	Clock      schema.Clock
+	// Logger receives classifier-failure warnings (never prompt text).
+	Logger *slog.Logger
 }
 
 // Engine is the production schema.Router. It is safe for concurrent use.
@@ -65,12 +69,18 @@ type Engine struct {
 	usage       []schema.UsageWindow
 	usageErrors int64
 	escalated   *lru
+
+	classifierErrors int64
+	lastClassifyErr  string
 }
 
 // New returns an Engine for cfg composed from d.
 func New(cfg config.Config, d Deps) *Engine {
 	if d.Clock == nil {
 		d.Clock = schema.SystemClock{}
+	}
+	if d.Logger == nil {
+		d.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &Engine{
 		cfg:       cfg,
@@ -142,16 +152,19 @@ func isWarm(s schema.SessionState, now time.Time, minTokens int64, idleMax time.
 	return s.CachedTokens > minTokens && now.Sub(s.LastActivity) < idleMax
 }
 
-// classify calls the classifier, falling back to Tier 2 on any failure.
+// classify calls the classifier, falling back to Tier 2 on any failure. Failures
+// are counted, logged, and reported in Status; a nil classifier is not a failure.
 func (e *Engine) classify(ctx context.Context, req schema.RouteRequest) schema.RoutingDecision {
 	if e.deps.Classifier != nil {
 		d, err := e.deps.Classifier.Classify(ctx, req)
 		if err == nil {
 			d = e.normalize(d, req, schema.SourceClassifier)
-			if d.Validate() == nil {
+			err = d.Validate()
+			if err == nil {
 				return d
 			}
 		}
+		e.classifierFailed(ctx, req.TaskID, err)
 	}
 	return schema.RoutingDecision{
 		TaskID:        req.TaskID,
@@ -322,6 +335,9 @@ func (e *Engine) Status(ctx context.Context) schema.StatusSnapshot {
 		Usage:        append([]schema.UsageWindow{}, e.usage...),
 		UsageErrors:  e.usageErrors,
 		WarmSessions: warm,
+
+		ClassifierErrors:    e.classifierErrors,
+		LastClassifierError: e.lastClassifyErr,
 	}
 	if snap.WarmSessions == nil {
 		snap.WarmSessions = []schema.SessionState{}
@@ -334,4 +350,16 @@ func (e *Engine) Status(ctx context.Context) schema.StatusSnapshot {
 	}
 	_, snap.Throttled = overThreshold(snap.Usage, e.cfg.QuotaThreshold)
 	return snap
+}
+
+// classifierFailed records and logs a classifier failure. Classifier errors
+// carry only status codes and error kinds, never prompt text.
+func (e *Engine) classifierFailed(ctx context.Context, taskID string, err error) {
+	msg := summarize(err)
+	e.mu.Lock()
+	e.classifierErrors++
+	e.lastClassifyErr = msg
+	e.mu.Unlock()
+	e.deps.Logger.LogAttrs(ctx, slog.LevelWarn, "classifier failed; falling back to Tier 2",
+		slog.String("task_id", taskID), slog.String("error", msg))
 }

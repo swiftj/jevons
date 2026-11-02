@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go: ["1.22.x", "stable"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: No Python allowed
+        run: test -z "$(git ls-files '*.py' 'requirements*.txt' 'pyproject.toml')"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - run: make vet
+      - uses: golangci/golangci-lint-action@v8
+        if: matrix.go == 'stable'
+        with:
+          version: v2.15
+      - run: make test
+      - run: make build
+      - name: Release build
+        if: matrix.os == 'ubuntu-latest' && matrix.go == 'stable'
+        run: make release
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest' && matrix.go == 'stable'
+        with:
+          name: dist
+          path: dist/

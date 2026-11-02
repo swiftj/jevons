@@ -212,7 +212,17 @@ Deterministic, dependency-free fakes. Every Wave 2 package tests against these.
 
 All mocks must be safe for concurrent use (`sync.Mutex`).
 
-## 7. Wave 1 Gate
+## 7. Wave 1 Additions (as built — authoritative over the sketches above)
+
+- `schema.NewID()` — 16-char crypto-random hex; use for TaskID / RunID.
+- `schema.SystemClock{}` — real `Clock`. `Tier.Valid()`, `Effort.Valid()` helpers.
+- `StatusSnapshot.UsageErrors int64` — count of failed `UsageSource.Windows` calls.
+- `config.Config.ModelFor(tier)`, `TierForModel(model) (Tier, bool)`, `Validate()`.
+- `mocks.NewMemSessions(idleMax, minTokens)`, `mocks.NewStaticUsage(ws...)` + `Set(ws, err)`,
+  `mocks.NewFakeClock(t)`; stubs expose `Calls()` / `Requests()` / `Routes()` / `Escalations()` /
+  `Notifications()` accessors. `StubClassifier` copies the request TaskID when its decision has none.
+
+## 8. Wave 1 Gate
 
 `go build ./... && go vet ./... && go test ./pkg/... ./internal/config/... ./internal/mocks/...`
 must pass. `cmd/*/main.go` exist as compiling stubs (`func main() {}` with TODO).

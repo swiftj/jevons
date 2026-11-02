@@ -21,7 +21,11 @@ Durations are Go duration strings (`"3s"`, `"50m"`, `"30m"`).
 | `classifier_model` | `JEV_CLASSIFIER_MODEL` | the Tier 1 model | `jev router` |
 | `anthropic_base_url` | `JEV_ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | `jev router` |
 | `api_key_env` | | `ANTHROPIC_API_KEY` | `jev router` |
-| `classifier_timeout` | | `3s` | `jev router` |
+| `classifier_timeout` | | `3s` (applies to Jev and Haiku separately) | `jev router` |
+| `typesafe_base_url` | `JEV_TYPESAFE_BASE_URL` | `https://api.typesafe.ai` | `jev router` |
+| `typesafe_model` | `JEV_TYPESAFE_MODEL` | `jev-latest` | `jev router` |
+| `typesafe_api_key_env` | | `TYPESAFE_API_KEY` | `jev router` |
+| `jev_min_confidence` | `JEV_MIN_CONFIDENCE` | `0.5` (0 to 1; below it, Haiku decides) | `jev router` |
 | `warm_idle_max` | | `50m` | `jev router` |
 | `warm_min_tokens` | | `100000` | `jev router` |
 | `quota_threshold` | `JEV_QUOTA_THRESHOLD` | `0.80` | `jev router` |
@@ -43,7 +47,8 @@ will talk to the wrong port or mislabel tiers.
 | Command | Flag | Meaning |
 |---------|------|---------|
 | `jev router` | `-addr` | Listen address. Overrides `listen_addr`. |
-| `jev router` | `-keychain SERVICE` | Read the API key from this macOS keychain item when the key env var is unset. |
+| `jev router` | `-keychain SERVICE` | Read the Anthropic API key from this macOS keychain item when its env var is unset. |
+| `jev router` | `-typesafe-keychain SERVICE` | Read the TypeSafe API key (for Jev) from this keychain item when its env var is unset. Without a TypeSafe key, Haiku is the only classifier. |
 | `jev hook` / `jev statusline` | `-addr` | Daemon address. Overrides `listen_addr`. |
 | `jev hook` / `jev statusline` | `-state-dir` | Where the hook keeps per-session suggestions (default `~/.jev/hook`). |
 | `jev hook` | `-timeout` | How long to wait for the daemon (default `5s`). |
@@ -69,3 +74,10 @@ these capacities as fixed token counts, so start from your own usage. Watch `usa
 `/status` for a week, then set each capacity to the level where you want Jev to start moving
 Tier 2 work to Tier 1. Only reported usage counts, which means `jev run` runs plus anything
 you post to `/usage` yourself.
+
+## Pinning the Jev model
+
+`jev-latest` moves when TypeSafe ships a new Jev release, and its confidence scores can shift
+with it. If you have tuned `jev_min_confidence`, pin a versioned ID such as `jev-1.14.0` in
+`typesafe_model`, and move to a newer one when you are ready. Decisions name the version that
+answered in their `rationale` (for example `jev-1.14.0 tier confidence 0.92`).

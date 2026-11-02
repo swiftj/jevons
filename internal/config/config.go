@@ -22,6 +22,10 @@ type Config struct {
 	AnthropicBaseURL  string
 	APIKeyEnv         string // name of the env var holding the key, never the value
 	ClassifierTimeout time.Duration
+	TypeSafeBaseURL   string
+	TypeSafeModel     string  // Jev model ID or alias sent to /v1/systemone
+	TypeSafeAPIKeyEnv string  // env var holding the TypeSafe key; Jev is skipped when it is unset
+	JevMinConfidence  float64 // Jev tier answers below this confidence fall back to the LLM classifier
 	WarmIdleMax       time.Duration
 	WarmMinTokens     int64
 	QuotaThreshold    float64
@@ -47,6 +51,10 @@ func Default() Config {
 		AnthropicBaseURL:  "https://api.anthropic.com",
 		APIKeyEnv:         "ANTHROPIC_API_KEY", // #nosec G101 -- env var name, not a credential
 		ClassifierTimeout: 3 * time.Second,
+		TypeSafeBaseURL:   "https://api.typesafe.ai",
+		TypeSafeModel:     "jev-latest",
+		TypeSafeAPIKeyEnv: "TYPESAFE_API_KEY", // #nosec G101 -- env var name, not a credential
+		JevMinConfidence:  0.5,
 		WarmIdleMax:       50 * time.Minute,
 		WarmMinTokens:     100_000,
 		QuotaThreshold:    0.80,
@@ -87,6 +95,9 @@ func (c Config) Validate() error {
 	if c.WarmIdleMax <= 0 || c.ClassifierTimeout <= 0 || c.RunTimeout <= 0 {
 		errs = append(errs, errors.New("config: durations must be positive"))
 	}
+	if c.JevMinConfidence < 0 || c.JevMinConfidence > 1 {
+		errs = append(errs, fmt.Errorf("config: jev min confidence %v not in [0,1]", c.JevMinConfidence))
+	}
 	if c.LogMaxFiles < 1 {
 		errs = append(errs, errors.New("config: log max files must be >= 1"))
 	}
@@ -101,6 +112,10 @@ type fileConfig struct {
 	AnthropicBaseURL  *string           `json:"anthropic_base_url"`
 	APIKeyEnv         *string           `json:"api_key_env"`
 	ClassifierTimeout *string           `json:"classifier_timeout"`
+	TypeSafeBaseURL   *string           `json:"typesafe_base_url"`
+	TypeSafeModel     *string           `json:"typesafe_model"`
+	TypeSafeAPIKeyEnv *string           `json:"typesafe_api_key_env"`
+	JevMinConfidence  *float64          `json:"jev_min_confidence"`
 	WarmIdleMax       *string           `json:"warm_idle_max"`
 	WarmMinTokens     *int64            `json:"warm_min_tokens"`
 	QuotaThreshold    *float64          `json:"quota_threshold"`
@@ -145,6 +160,9 @@ func (c *Config) applyFile(fc fileConfig) error {
 	setStr(&c.ClassifierModel, fc.ClassifierModel)
 	setStr(&c.AnthropicBaseURL, fc.AnthropicBaseURL)
 	setStr(&c.APIKeyEnv, fc.APIKeyEnv)
+	setStr(&c.TypeSafeBaseURL, fc.TypeSafeBaseURL)
+	setStr(&c.TypeSafeModel, fc.TypeSafeModel)
+	setStr(&c.TypeSafeAPIKeyEnv, fc.TypeSafeAPIKeyEnv)
 	setStr(&c.ClaudeBin, fc.ClaudeBin)
 	if fc.LogDir != nil {
 		c.LogDir = expandHome(*fc.LogDir)
@@ -176,6 +194,9 @@ func (c *Config) applyFile(fc fileConfig) error {
 	if fc.WarmMinTokens != nil {
 		c.WarmMinTokens = *fc.WarmMinTokens
 	}
+	if fc.JevMinConfidence != nil {
+		c.JevMinConfidence = *fc.JevMinConfidence
+	}
 	if fc.QuotaThreshold != nil {
 		c.QuotaThreshold = *fc.QuotaThreshold
 	}
@@ -197,6 +218,8 @@ func (c *Config) applyEnv(getenv func(string) string) error {
 		"JEV_CLASSIFIER_MODEL":   &c.ClassifierModel,
 		"JEV_ANTHROPIC_BASE_URL": &c.AnthropicBaseURL,
 		"JEV_CLAUDE_BIN":         &c.ClaudeBin,
+		"JEV_TYPESAFE_BASE_URL":  &c.TypeSafeBaseURL,
+		"JEV_TYPESAFE_MODEL":     &c.TypeSafeModel,
 	}
 	for k, dst := range strs {
 		if v := getenv(k); v != "" {
@@ -226,6 +249,13 @@ func (c *Config) applyEnv(getenv func(string) string) error {
 			}
 			*dst = n
 		}
+	}
+	if v := getenv("JEV_MIN_CONFIDENCE"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("config: JEV_MIN_CONFIDENCE: %w", err)
+		}
+		c.JevMinConfidence = f
 	}
 	if v := getenv("JEV_QUOTA_THRESHOLD"); v != "" {
 		f, err := strconv.ParseFloat(v, 64)

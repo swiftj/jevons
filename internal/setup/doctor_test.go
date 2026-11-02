@@ -20,7 +20,7 @@ func checksByName(cs []Check) map[string]Check {
 func TestDoctorHealthy(t *testing.T) {
 	t.Parallel()
 	env, host, _, _ := testEnv(t, "darwin")
-	host.hasKey = true
+	host.keys = map[string]bool{KeychainService: true, TypeSafeKeychainService: true}
 	if err := env.Install(context.Background(), InstallOptions{Yes: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestDoctorHealthy(t *testing.T) {
 	// fakeGitHub swapped HTTP to the TLS test client, which can still reach
 	// the plain-HTTP daemon.
 	cs := checksByName(env.Doctor(context.Background(), true))
-	for _, name := range []string{"binary", "PATH", "update", "API key", "login agent", "daemon", "classifier", "Claude Code"} {
+	for _, name := range []string{"binary", "PATH", "update", "Anthropic API key", "TypeSafe API key", "login agent", "daemon", "classifier", "Claude Code"} {
 		if c, ok := cs[name]; !ok || !c.OK {
 			t.Errorf("%s: %+v", name, c)
 		}
@@ -54,20 +54,20 @@ func TestDoctorProblems(t *testing.T) {
 		return ""
 	}
 	cs := checksByName(env.Doctor(context.Background(), false))
-	for _, name := range []string{"binary", "PATH", "API key", "login agent", "daemon", "Claude Code"} {
+	for _, name := range []string{"binary", "PATH", "Anthropic API key", "TypeSafe API key", "login agent", "daemon", "Claude Code"} {
 		if cs[name].OK {
 			t.Errorf("%s unexpectedly OK: %+v", name, cs[name])
 		}
 	}
-	if !strings.Contains(cs["API key"].Detail, "login agent cannot see it") {
-		t.Errorf("API key detail = %q", cs["API key"].Detail)
+	if !strings.Contains(cs["Anthropic API key"].Detail, "login agent cannot see it") {
+		t.Errorf("API key detail = %q", cs["Anthropic API key"].Detail)
 	}
 	if _, ok := cs["update"]; ok {
 		t.Error("offline doctor checked for updates")
 	}
 
 	env.Getenv = func(string) string { return "" }
-	if c := checksByName(env.Doctor(context.Background(), false))["API key"]; c.OK || !strings.Contains(c.Detail, "not set") {
+	if c := checksByName(env.Doctor(context.Background(), false))["Anthropic API key"]; c.OK || !strings.Contains(c.Detail, "not set") {
 		t.Errorf("no key: %+v", c)
 	}
 }

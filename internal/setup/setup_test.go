@@ -25,7 +25,7 @@ type fakeHost struct {
 	mu        sync.Mutex
 	calls     []string
 	stdin     []string
-	hasKey    bool
+	keys      map[string]bool // keychain service -> item present
 	loaded    bool
 	versionOf map[string]string // binary path -> `version` output
 }
@@ -40,15 +40,18 @@ func (f *fakeHost) exec(_ context.Context, stdin io.Reader, name string, args ..
 	}
 	switch {
 	case name == securityBin && args[0] == "find-generic-password":
-		if f.hasKey {
+		if f.keys[args[2]] {
 			return nil, nil
 		}
 		return nil, errors.New("exit status 44")
 	case name == securityBin && args[0] == "-i":
-		f.hasKey = true
+		if f.keys == nil {
+			f.keys = map[string]bool{}
+		}
+		f.keys[strings.Fields(f.stdin[len(f.stdin)-1])[4]] = true
 		return nil, nil
 	case name == securityBin && args[0] == "delete-generic-password":
-		f.hasKey = false
+		delete(f.keys, args[2])
 		return nil, nil
 	case name == launchctl && args[0] == "print":
 		if f.loaded {
@@ -75,6 +78,13 @@ func (f *fakeHost) exec(_ context.Context, stdin io.Reader, name string, args ..
 		return bytes.TrimPrefix(b, []byte("binary ")), nil
 	}
 	return nil, fmt.Errorf("unexpected exec: %s %v", name, args)
+}
+
+// hasKey reports whether the fake keychain holds service.
+func (f *fakeHost) hasKey(service string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.keys[service]
 }
 
 func (f *fakeHost) called(prefix string) bool {
@@ -118,7 +128,7 @@ func testEnv(t *testing.T, goos string) (*Env, *fakeHost, *bytes.Buffer, *atomic
 		Home: home, BinDir: filepath.Join(home, ".local", "bin"), Exe: exe, Version: "v0.1.0",
 		User: "tester", UID: 501,
 		DaemonAddr: strings.TrimPrefix(daemon.URL, "http://"),
-		APIBase:    "http://unused.invalid", APIKeyEnv: "ANTHROPIC_API_KEY",
+		APIBase:    "http://unused.invalid", APIKeyEnv: "ANTHROPIC_API_KEY", TypeSafeKeyEnv: "TYPESAFE_API_KEY",
 		HealthTimeout: 300 * time.Millisecond,
 		HTTP:          daemon.Client(),
 		Getenv:        func(string) string { return "" },

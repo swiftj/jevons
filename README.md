@@ -12,8 +12,10 @@ How it decides:
 - **Zero-cost pre-filter.** Slash commands (`/cleanup`, `/grammar`, `/format`, `/calibrate`)
   and mechanical prefixes (`fix typo:`, `format json:`, …) route to Tier 1 locally in under a
   microsecond.
-- **Micro-JSON classifier.** Everything else is classified with one small Messages API call.
-  If that call fails, the router falls back to Tier 2.
+- **Jev classifier.** Everything else goes to [Jev](https://docs.typesafe.ai/), TypeSafe AI's
+  System One model, which picks a tier with a calibrated confidence in about 100 ms. When Jev
+  is unsure or unavailable, one small Haiku call decides instead; if that fails too, the
+  router falls back to Tier 2.
 - **Cache-warmth reuse**, **quota throttling** (5h / 7d windows at 80%), and **Tier 1 → Tier 2
   escalation** for failed headless runs.
 
@@ -28,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/swiftj/jevons/main/install.sh | sh
 This downloads the latest release, checks its SHA-256 and runs `jev install`, which does the
 following:
 - installs `jev` to `~/.local/bin`
-- stores your API key in the keychain
+- stores your Anthropic and TypeSafe API keys in the keychain
 - starts the daemon at login
 - adds the hook and status line to Claude Code after asking you
 

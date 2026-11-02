@@ -1,8 +1,8 @@
 # CLAUDE.md — Jev-Pro Agentic Router & Extension Engine
 
 **Jev-Pro** is a compiled Go routing engine for Claude Desktop / Claude Code that picks the
-cheapest capable model tier per prompt: $0 local regex pre-filtering, a micro-JSON LLM
-classifier fallback, cache-warmth reuse, quota throttling, a Tier 1→2 escalation gate, a
+cheapest capable model tier per prompt: $0 local regex pre-filtering, TypeSafe's Jev System One classifier with a
+micro-JSON LLM (Haiku) fallback, cache-warmth reuse, quota throttling, a Tier 1→2 escalation gate, a
 headless `claude -p` runner, and a loopback telemetry server for Claude Mods.
 
 ## Locked Stack
@@ -64,6 +64,8 @@ All three waves are complete. Since then: `POST /session` + `POST /usage` feeds 
 and `jev run` usage reporting + Tier 1 → Tier 2 auto-escalation via `internal/client` (spec 06),
 the Claude Code hook (`jev hook` / `jev statusline`), and a single `jev` binary that installs and
 updates itself from GitHub Releases (`internal/setup`: keychain key, launchd agent, Claude settings).
+Classification now goes to Jev first (`internal/classifier/jev.go`, `chain.go`; spec 02 section C),
+with its TypeSafe key in the keychain item `jev-pro-typesafe`.
 For new work, keep the ownership boundaries below: change `pkg/schema` / `internal/config` /
 `internal/mocks` first, gate, then edit implementation packages in parallel.
 

@@ -16,13 +16,14 @@ release's `SHA256SUMS`, and runs `jev install`. That command goes through these 
 
 1. **Binary.** Copies `jev` to `~/.local/bin/jev`. If that directory isn't on your `PATH`,
    it prints the line to add to `~/.zshrc`.
-2. **API key.** If the keychain already has the key (service `jev-pro`), it keeps it.
-   Otherwise it offers to store `$ANTHROPIC_API_KEY`, or prompts for the key with input
-   hidden. Press Enter to skip. The key goes to `security` on stdin, so it never shows up in a
-   process list, a file or a log.
+2. **API keys.** Two keychain items: the Anthropic key (service `jev-pro`, used by the Haiku
+   fallback) and the TypeSafe key (service `jev-pro-typesafe`, used by Jev). For each, an
+   item already in the keychain is kept. Otherwise it offers to store `$ANTHROPIC_API_KEY` or
+   `$TYPESAFE_API_KEY`, or prompts for the key with input hidden. Press Enter to skip. Keys go
+   to `security` on stdin, so they never show up in a process list, a file or a log.
 3. **Daemon.** Writes the launchd agent
    `~/Library/LaunchAgents/com.github.swiftj.jev-router.plist`, which runs
-   `jev router -keychain jev-pro`. It loads the agent and waits for `/healthz` to answer. The
+   `jev router -keychain jev-pro -typesafe-keychain jev-pro-typesafe`. It loads the agent and waits for `/healthz` to answer. The
    daemon then starts at every login and restarts if it exits. Its log is
    `~/.jev/jev-router.log`.
 4. **Claude Code.** Shows the changes it plans for `~/.claude/settings.json`: a
@@ -42,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/swiftj/jevons/main/install.sh | JEV
 
 | `jev install` flag | Meaning |
 |--------------------|---------|
-| `-yes` | Accept every prompt. Doesn't prompt for a key, but still stores `$ANTHROPIC_API_KEY` if set. |
+| `-yes` | Accept every prompt. Doesn't prompt for keys, but still stores `$ANTHROPIC_API_KEY` and `$TYPESAFE_API_KEY` if set. |
 | `-no-agent` | Don't install the launchd agent. |
 | `-no-settings` | Leave Claude Code settings alone. |
 | `-bin-dir DIR` | Install somewhere other than `~/.local/bin` (or set `JEV_BIN_DIR`). |
@@ -104,10 +105,16 @@ when a newer release is out.
 
 ## Put the API key in the keychain by hand
 
-`jev install` normally does this. To store or rotate the key yourself:
+`jev install` normally does this. To store or rotate a key yourself:
 
 ```bash
 security add-generic-password -a "$USER" -s jev-pro -T /usr/bin/security -U -w
+```
+
+For the TypeSafe key (Jev), use service `jev-pro-typesafe`:
+
+```bash
+security add-generic-password -a "$USER" -s jev-pro-typesafe -T /usr/bin/security -U -w
 ```
 
 `-w` with no value makes `security` prompt for the key, so it stays out of your shell
@@ -117,8 +124,9 @@ history. `-U` replaces an existing item. Check that the item exists without prin
 security find-generic-password -s jev-pro >/dev/null && echo stored
 ```
 
-`jev router -keychain jev-pro` reads the item only when `ANTHROPIC_API_KEY` is not already
-set. If the lookup fails, the daemon logs a warning and keeps running. Slash commands and
+The daemon reads each item only when its env var (`ANTHROPIC_API_KEY`, `TYPESAFE_API_KEY`) is
+not already set. If a lookup fails, the daemon logs a warning and keeps running. Without the
+TypeSafe key, Haiku classifies every free-text prompt. Without either key, slash commands and
 mechanical prefixes still route to Tier 1, and everything else falls back to Tier 2. After
 changing the key, restart the daemon:
 
@@ -128,7 +136,8 @@ launchctl kickstart -k gui/$(id -u)/com.github.swiftj.jev-router
 
 ## Using a config file with the daemon
 
-The agent runs `jev router -keychain jev-pro` with default settings. To use a
+The agent runs `jev router -keychain jev-pro -typesafe-keychain jev-pro-typesafe` with default
+settings. To use a
 [config file](configuration.md), add it to `ProgramArguments` in
 `~/Library/LaunchAgents/com.github.swiftj.jev-router.plist`, right after `router`. launchd
 doesn't expand `~`, so give the full path:

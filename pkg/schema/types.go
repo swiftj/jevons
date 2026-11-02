@@ -56,6 +56,8 @@ const (
 	SourcePrefilter DecisionSource = "prefilter"
 	// SourceClassifier means the micro-JSON LLM classifier decided.
 	SourceClassifier DecisionSource = "classifier"
+	// SourceJev means TypeSafe's Jev System One model decided.
+	SourceJev DecisionSource = "jev"
 	// SourceCache means an existing warm session was reused.
 	SourceCache DecisionSource = "cache_warm"
 	// SourceThrottle means the decision was downgraded by the quota throttle.

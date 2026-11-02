@@ -31,10 +31,11 @@ func xmlEscape(s string) string {
 func (e *Env) AgentPlistData() ([]byte, error) {
 	var b bytes.Buffer
 	err := agentTmpl.Execute(&b, map[string]string{
-		"Label":    AgentLabel,
-		"Binary":   e.Target(),
-		"Keychain": KeychainService,
-		"Log":      filepath.Join(e.JevDir(), "jev-router.log"),
+		"Label":            AgentLabel,
+		"Binary":           e.Target(),
+		"Keychain":         KeychainService,
+		"TypeSafeKeychain": TypeSafeKeychainService,
+		"Log":              filepath.Join(e.JevDir(), "jev-router.log"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("setup: render agent: %w", err)

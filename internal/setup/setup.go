@@ -24,6 +24,8 @@ const (
 	Repo = "swiftj/jevons"
 	// KeychainService is the keychain item holding the Anthropic API key.
 	KeychainService = "jev-pro"
+	// TypeSafeKeychainService is the keychain item holding the TypeSafe API key for Jev.
+	TypeSafeKeychainService = "jev-pro-typesafe"
 	// AgentLabel is the launchd label of the daemon agent.
 	AgentLabel = "com.github.swiftj.jev-router"
 	// BinaryName is the installed executable's name.
@@ -33,16 +35,17 @@ const (
 // Env is the host as setup sees it. Zero fields are not defaulted; use
 // DefaultEnv for a real machine.
 type Env struct {
-	GOOS, GOARCH string
-	Home         string // user home directory
-	BinDir       string // where jev is installed
-	Exe          string // path of the running binary
-	Version      string // version of the running binary
-	User         string // login name, the keychain account
-	UID          int
-	DaemonAddr   string // host:port of the daemon
-	APIBase      string // GitHub API base URL
-	APIKeyEnv    string // env var the classifier reads
+	GOOS, GOARCH   string
+	Home           string // user home directory
+	BinDir         string // where jev is installed
+	Exe            string // path of the running binary
+	Version        string // version of the running binary
+	User           string // login name, the keychain account
+	UID            int
+	DaemonAddr     string // host:port of the daemon
+	APIBase        string // GitHub API base URL
+	APIKeyEnv      string // env var the classifier reads
+	TypeSafeKeyEnv string // env var the Jev classifier reads
 	// HealthTimeout bounds waiting for the daemon after (re)starting it
 	// (default 10s).
 	HealthTimeout time.Duration

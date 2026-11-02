@@ -70,3 +70,38 @@ Implements `schema.Classifier` by calling the Anthropic Messages API directly wi
   500×2, slow server exceeding timeout, ctx cancellation, missing key.
 - Assert request body shape (model, max_tokens, system cache_control) and headers.
 - Assert the API key never appears in returned errors.
+
+## C. Jev Classifier and Chain — `internal/classifier`
+
+[Jev](https://docs.typesafe.ai/) is TypeSafe AI's System One model: typed questions in,
+typed answers with calibrated probabilities out. It is the primary classifier; section B is
+its fallback.
+
+### Request (`jev.go`)
+- `POST {TypeSafeBaseURL}/v1/systemone`, `Authorization: Bearer <os.Getenv(cfg.TypeSafeAPIKeyEnv)>`.
+- `model = cfg.TypeSafeModel`, `state = {"user_prompt": <prompt truncated to 8 KiB>}`.
+- Two questions in one request:
+  - `task_tier`: `choice` over `TIER_1` / `TIER_2` / `TIER_3`, with the section B rubric as
+    option descriptions.
+  - `effort`: `score` over three ordered levels; the score (0–2) rounds to low / medium / high.
+
+### Response handling
+- `Source=SourceJev`; `Rationale = "<answering model id> tier confidence <c>"`.
+- Missing key → `ErrClassifierUnavailable` without a request. Non-200 → `ErrClassifierUnavailable`
+  (error bodies are not surfaced). One jittered retry for 429/5xx (incl. 529). Missing or
+  mistyped answers, or an unknown tier → `ErrInvalidDecision`.
+- Tier confidence `< cfg.JevMinConfidence` → the valid decision **and** an error wrapping
+  `ErrLowConfidence`.
+
+### Chain (`chain.go`)
+`NewChain(primary, fallback, logger)`: primary success → return it. Otherwise ask the fallback
+and prefix its rationale with `jev_unavailable: ` or `jev_low_confidence: `. If the fallback
+also fails, a low-confidence primary decision is still returned; otherwise both errors are
+returned (wrapping `ErrClassifierUnavailable`) and the router falls back to Tier 2.
+`jev router` builds the chain only when the TypeSafe key is present at startup.
+
+### Tests
+- Fake `/v1/systemone`: request shape and bearer header, confidence at / just below the
+  threshold, score rounding boundaries, 401/422/529×2/429-then-200, bad JSON, unknown tier,
+  missing answers, missing key, backoff cancellation, key never in errors.
+- Chain table: primary ok, primary down, low confidence, low confidence + fallback down, both down.

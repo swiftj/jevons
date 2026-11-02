@@ -156,8 +156,10 @@ func (c *Client) call(ctx context.Context, key string, body []byte) (string, err
 	return text, err
 }
 
-func (c *Client) wait(ctx context.Context) error {
-	d := c.backoff
+func (c *Client) wait(ctx context.Context) error { return backoffWait(ctx, c.backoff) }
+
+// backoffWait sleeps for d with +/-50% jitter, or until ctx is done.
+func backoffWait(ctx context.Context, d time.Duration) error {
 	if d > 0 {
 		// #nosec G404 -- retry jitter, not security sensitive.
 		d = d/2 + time.Duration(rand.Int64N(int64(d)))

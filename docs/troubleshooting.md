@@ -47,6 +47,17 @@ still shows `source` = `classifier`. To confirm, look at `classifier_errors` and
 - Timeouts: the API was slower than `classifier_timeout` (3 s). Raise the timeout in a
   config file if this keeps happening.
 
+**Decisions show `source` = `classifier` instead of `jev`.**
+Haiku decided, not Jev. The `rationale` says why:
+- No `jev_` prefix: Jev is not enabled. The daemon log says `TypeSafe API key not set` at
+  startup. Store the key under `jev-pro-typesafe` (see
+  [Install](install.md#put-the-api-key-in-the-keychain-by-hand)) and restart the daemon.
+- `jev_unavailable:` Jev failed. The daemon log has `jev classifier failed` with the HTTP
+  status: 401 means a wrong or revoked key, 429 or 529 means TypeSafe is rate limiting or
+  overloaded (Jev retries once), and a timeout means it took longer than `classifier_timeout`.
+- `jev_low_confidence:` Jev answered but was unsure, so Haiku decided. This is normal for a
+  few prompts. If it happens for most of them, lower `jev_min_confidence`.
+
 **`jev run` reports 0 tokens.**
 `jev run` parses `claude -p --output-format json`. It handles warning lines that `claude`
 prints before the JSON, such as `claude.ai connectors are disabled…`. If `claude` ever changes

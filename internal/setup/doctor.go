@@ -42,13 +42,15 @@ func (e *Env) Doctor(ctx context.Context, online bool) []Check {
 		}
 	}
 	if e.darwin() {
-		switch {
-		case e.HasKey(ctx):
-			add("API key", true, "in the keychain ("+KeychainService+")")
-		case e.Getenv(e.APIKeyEnv) != "":
-			add("API key", false, "only in $"+e.APIKeyEnv+"; the login agent cannot see it. Run `jev install` to store it")
-		default:
-			add("API key", false, "not set; free-text prompts route to Tier 2. Run `jev install`")
+		for _, k := range []apiKey{e.anthropicKey(), e.typesafeKey()} {
+			switch {
+			case e.HasKey(ctx, k.Service):
+				add(k.Name, true, "in the keychain ("+k.Service+")")
+			case k.Env != "" && e.Getenv(k.Env) != "":
+				add(k.Name, false, "only in $"+k.Env+"; the login agent cannot see it. Run `jev install` to store it")
+			default:
+				add(k.Name, false, "not set; "+k.Missing+". Run `jev install`")
+			}
 		}
 		if e.AgentLoaded(ctx) {
 			add("login agent", true, AgentLabel+" loaded")

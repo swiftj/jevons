@@ -111,7 +111,7 @@ func newSetupEnv(ctx context.Context, binDir, cfgPath string, stdin io.Reader, s
 		GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		Home: home, BinDir: binDir, Exe: exe, Version: version,
 		User: name, UID: os.Getuid(),
-		DaemonAddr: cfg.ListenAddr, APIBase: apiBase, APIKeyEnv: cfg.APIKeyEnv,
+		DaemonAddr: cfg.ListenAddr, APIBase: apiBase, APIKeyEnv: cfg.APIKeyEnv, TypeSafeKeyEnv: cfg.TypeSafeAPIKeyEnv,
 		HTTP:   &http.Client{Timeout: 2 * time.Minute},
 		Getenv: os.Getenv,
 		Exec:   setup.DefaultExec,

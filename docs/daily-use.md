@@ -26,14 +26,20 @@ Each prompt goes through these stages, and the first one that decides wins:
 2. **Cache warmth.** If the request names a session that is warm (more than 100k cached
    tokens, active in the last 50 minutes), Jev keeps that session's model. Re-reading a warm
    cache is cheaper than switching.
-3. **Classifier.** Everything else gets one small Messages API call to the Tier 1 model, which
-   returns a tier. If that call fails or times out (3 s), Jev falls back to Tier 2.
+3. **Classifier.** Everything else goes to Jev, TypeSafe AI's System One model. One call asks
+   two typed questions: which tier (a Choice with a confidence from 0 to 1) and how much
+   reasoning (a Score mapped to low, medium or high effort). If Jev's tier confidence is
+   below `jev_min_confidence` (0.5), or Jev fails or times out (3 s), one small Messages API
+   call to the Tier 1 model decides instead, and its rationale starts with
+   `jev_low_confidence:` or `jev_unavailable:`. If that call fails too, Jev falls back to
+   Tier 2. Without a TypeSafe key the Haiku call is the only classifier.
 4. **Quota throttle.** If you have set capacities and a 5h or 7d window is past 80%, Tier 2
    decisions drop to Tier 1, unless the request is marked `essential`. Tier 3 decisions are
    never throttled.
 
-The `source` in each decision (`prefilter`, `cache_warm`, `classifier`, `throttle`,
-`escalation`) says which stage decided.
+The `source` in each decision (`prefilter`, `cache_warm`, `jev`, `classifier`, `throttle`,
+`escalation`) says which stage decided. `jev` means Jev decided; `classifier` means the Haiku
+fallback did.
 
 ## Claude Code: hook and status line
 
@@ -70,9 +76,10 @@ are actually using:
 The status line command can only be one command. If you already have a status line script,
 call `jev statusline` from it and pass its stdin along.
 
-**What it costs.** A prompt that the pre-filter doesn't catch costs one classifier call to
-the Tier 1 model. That call is a few hundred tokens and can delay your prompt by up to 3 s.
-Without a key, the classifier is skipped and those prompts show Tier 2.
+**What it costs.** A prompt that the pre-filter doesn't catch costs one Jev call: a few
+hundred input tokens at $0.042 per million, usually well under a second. Only when Jev is
+unsure or down does it also cost a Haiku call of a few hundred tokens, which can add up to 3 s.
+With neither key, the classifier is skipped and those prompts show Tier 2.
 
 **It never gets in your way.** If the daemon is down, the hook prints nothing and your prompt
 goes through as normal. Any other problem is written to stderr (you see it in verbose mode)

@@ -28,7 +28,7 @@ suitable status code.
 }
 ```
 
-`source` is one of `prefilter`, `cache_warm`, `classifier`, `throttle`, `escalation`.
+`source` is one of `prefilter`, `cache_warm`, `jev`, `classifier`, `throttle`, `escalation`.
 `essential: true` on `/route` excludes the request from throttling.
 
 ## Status

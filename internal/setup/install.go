@@ -28,7 +28,8 @@ func (e *Env) Install(ctx context.Context, opt InstallOptions) error {
 	}
 
 	if e.darwin() {
-		e.installKey(ctx, opt)
+		e.installKey(ctx, opt, e.anthropicKey())
+		e.installKey(ctx, opt, e.typesafeKey())
 		if !opt.NoAgent {
 			if err := e.InstallAgent(ctx); err != nil {
 				return err
@@ -78,33 +79,52 @@ func (e *Env) installBinary() error {
 	return nil
 }
 
-// installKey makes sure the keychain holds the API key, offering to store
-// $ANTHROPIC_API_KEY or prompting for one.
-func (e *Env) installKey(ctx context.Context, opt InstallOptions) {
-	if e.HasKey(ctx) {
-		e.step(true, "API key found in the keychain (%s)", KeychainService)
+// apiKey describes one API key the daemon reads from the keychain.
+type apiKey struct {
+	Name    string // shown to the user, e.g. "Anthropic API key"
+	Service string // keychain service
+	Env     string // env var it may already be in
+	Missing string // consequence of not storing it
+}
+
+func (e *Env) anthropicKey() apiKey {
+	return apiKey{"Anthropic API key", KeychainService, e.APIKeyEnv, "free-text prompts route to Tier 2"}
+}
+
+func (e *Env) typesafeKey() apiKey {
+	return apiKey{"TypeSafe API key", TypeSafeKeychainService, e.TypeSafeKeyEnv, "Jev routing is off and Haiku classifies prompts"}
+}
+
+// installKey makes sure the keychain holds k, offering to store the value of
+// its env var or prompting for one.
+func (e *Env) installKey(ctx context.Context, opt InstallOptions, k apiKey) {
+	if e.HasKey(ctx, k.Service) {
+		e.step(true, "%s found in the keychain (%s)", k.Name, k.Service)
 		return
 	}
-	key := e.Getenv(e.APIKeyEnv)
+	key := ""
+	if k.Env != "" {
+		key = e.Getenv(k.Env)
+	}
 	switch {
-	case key != "" && (opt.Yes || e.Confirm(fmt.Sprintf("Store $%s in the macOS keychain for the daemon?", e.APIKeyEnv))):
+	case key != "" && (opt.Yes || e.Confirm(fmt.Sprintf("Store $%s in the macOS keychain for the daemon?", k.Env))):
 	case key == "" && !opt.Yes:
 		var err error
-		if key, err = e.ReadSecret("Anthropic API key (input hidden, Enter to skip): "); err != nil {
+		if key, err = e.ReadSecret(k.Name + " (input hidden, Enter to skip): "); err != nil {
 			key = ""
 		}
 	default:
 		key = ""
 	}
 	if strings.TrimSpace(key) == "" {
-		e.step(false, "no API key stored; free-text prompts will route to Tier 2. Re-run `jev install` to add one")
+		e.step(false, "no %s stored; %s. Re-run `jev install` to add one", k.Name, k.Missing)
 		return
 	}
-	if err := e.StoreKey(ctx, key); err != nil {
-		e.step(false, "%v", err)
+	if err := e.StoreKey(ctx, k.Service, key); err != nil {
+		e.step(false, "%s: %v", k.Name, err)
 		return
 	}
-	e.step(true, "API key stored in the keychain (%s)", KeychainService)
+	e.step(true, "%s stored in the keychain (%s)", k.Name, k.Service)
 }
 
 // installSettings shows the planned Claude Code settings change and applies it
@@ -178,10 +198,12 @@ func (e *Env) Uninstall(ctx context.Context, opt UninstallOptions) error {
 		return nil
 	}
 	if e.darwin() {
-		if err := e.DeleteKey(ctx); err != nil {
-			return err
+		for _, k := range []apiKey{e.anthropicKey(), e.typesafeKey()} {
+			if err := e.DeleteKey(ctx, k.Service); err != nil {
+				return err
+			}
+			e.step(true, "%s removed from the keychain", k.Name)
 		}
-		e.step(true, "API key removed from the keychain")
 	}
 	if err := os.RemoveAll(e.JevDir()); err != nil {
 		return fmt.Errorf("setup: %w", err)

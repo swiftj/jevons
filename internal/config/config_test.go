@@ -97,3 +97,41 @@ func TestEnvOverrides(t *testing.T) {
 		t.Error("expected parse error")
 	}
 }
+
+func TestJevSettings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "jev.json")
+	body := `{"typesafe_base_url":"http://127.0.0.1:1","typesafe_model":"jev-1.14.0",
+"typesafe_api_key_env":"TS_KEY","jev_min_confidence":0.7}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.TypeSafeBaseURL != "http://127.0.0.1:1" || cfg.TypeSafeModel != "jev-1.14.0" ||
+		cfg.TypeSafeAPIKeyEnv != "TS_KEY" || cfg.JevMinConfidence != 0.7 {
+		t.Errorf("unexpected config: %+v", cfg)
+	}
+
+	t.Setenv("JEV_TYPESAFE_MODEL", "jev-preview")
+	t.Setenv("JEV_MIN_CONFIDENCE", "0.25")
+	cfg, err = Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.TypeSafeModel != "jev-preview" || cfg.JevMinConfidence != 0.25 {
+		t.Errorf("env overrides not applied: %+v", cfg)
+	}
+
+	for _, tc := range []struct {
+		v  string
+		ok bool
+	}{{"0", true}, {"1", true}, {"-0.01", false}, {"1.01", false}, {"high", false}} {
+		t.Setenv("JEV_MIN_CONFIDENCE", tc.v)
+		if _, err := Load(""); (err == nil) != tc.ok {
+			t.Errorf("JEV_MIN_CONFIDENCE=%s: err = %v, want ok=%v", tc.v, err, tc.ok)
+		}
+	}
+}

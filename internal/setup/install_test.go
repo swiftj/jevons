@@ -37,7 +37,7 @@ func TestInstallDarwin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("plist: %v", err)
 	}
-	for _, want := range []string{env.Target(), "<string>router</string>", "<string>jev-pro</string>", AgentLabel} {
+	for _, want := range []string{env.Target(), "<string>router</string>", "<string>jev-pro</string>", "<string>-typesafe-keychain</string>", "<string>jev-pro-typesafe</string>", AgentLabel} {
 		if !strings.Contains(string(plist), want) {
 			t.Errorf("plist missing %q", want)
 		}
@@ -59,7 +59,7 @@ func TestInstallDarwin(t *testing.T) {
 	if err := env.Install(ctx, InstallOptions{}); err != nil {
 		t.Fatalf("second Install: %v", err)
 	}
-	for _, want := range []string{"already at", "API key found", "already set up"} {
+	for _, want := range []string{"already at", "Anthropic API key found", "already set up"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("second run missing %q:\n%s", want, out)
 		}
@@ -75,16 +75,16 @@ func TestInstallKeyPrompts(t *testing.T) {
 
 	// No env key: prompt; empty answer skips.
 	env, host, out, _ := testEnv(t, "darwin")
-	env.installKey(ctx, InstallOptions{})
-	if host.hasKey || !strings.Contains(out.String(), "no API key stored") {
-		t.Errorf("empty prompt: hasKey=%v\n%s", host.hasKey, out)
+	env.installKey(ctx, InstallOptions{}, env.anthropicKey())
+	if host.hasKey(KeychainService) || !strings.Contains(out.String(), "no Anthropic API key stored") {
+		t.Errorf("empty prompt: hasKey=%v\n%s", host.hasKey(KeychainService), out)
 	}
 
 	// Prompted key is stored.
 	env, host, _, _ = testEnv(t, "darwin")
 	env.ReadSecret = func(string) (string, error) { return "sk-ant-typed-0123456789", nil }
-	env.installKey(ctx, InstallOptions{})
-	if !host.hasKey {
+	env.installKey(ctx, InstallOptions{}, env.anthropicKey())
+	if !host.hasKey(KeychainService) {
 		t.Error("typed key not stored")
 	}
 
@@ -92,25 +92,25 @@ func TestInstallKeyPrompts(t *testing.T) {
 	env, host, _, _ = testEnv(t, "darwin")
 	env.Getenv = func(string) string { return "sk-ant-env-0123456789" }
 	env.Confirm = func(string) bool { return false }
-	env.installKey(ctx, InstallOptions{})
-	if host.hasKey {
+	env.installKey(ctx, InstallOptions{}, env.anthropicKey())
+	if host.hasKey(KeychainService) {
 		t.Error("declined key stored")
 	}
 
 	// -yes without an env key never prompts.
 	env, host, _, _ = testEnv(t, "darwin")
 	env.ReadSecret = func(string) (string, error) { t.Error("prompted under -yes"); return "", nil }
-	env.installKey(ctx, InstallOptions{Yes: true})
-	if host.hasKey {
+	env.installKey(ctx, InstallOptions{Yes: true}, env.anthropicKey())
+	if host.hasKey(KeychainService) {
 		t.Error("key stored without one")
 	}
 
 	// A malformed key is rejected before reaching security.
 	env, host, out, _ = testEnv(t, "darwin")
 	env.ReadSecret = func(string) (string, error) { return "bad key; rm -rf", nil }
-	env.installKey(ctx, InstallOptions{})
-	if host.hasKey || len(host.stdin) != 0 || !strings.Contains(out.String(), "does not look like") {
-		t.Errorf("bad key: hasKey=%v stdin=%q\n%s", host.hasKey, host.stdin, out)
+	env.installKey(ctx, InstallOptions{}, env.anthropicKey())
+	if host.hasKey(KeychainService) || len(host.stdin) != 0 || !strings.Contains(out.String(), "does not look like") {
+		t.Errorf("bad key: hasKey=%v stdin=%q\n%s", host.hasKey(KeychainService), host.stdin, out)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestUninstall(t *testing.T) {
 	t.Parallel()
 	env, host, out, _ := testEnv(t, "darwin")
 	ctx := context.Background()
-	host.hasKey = true
+	host.keys = map[string]bool{KeychainService: true, TypeSafeKeychainService: true}
 	if err := env.Install(ctx, InstallOptions{Yes: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestUninstall(t *testing.T) {
 	if hook, status := env.SettingsWired(); hook || status {
 		t.Error("settings still wired")
 	}
-	if !host.hasKey {
+	if !host.hasKey(KeychainService) {
 		t.Error("key removed without -purge")
 	}
 
@@ -195,10 +195,47 @@ func TestUninstall(t *testing.T) {
 	if err := env.Uninstall(ctx, UninstallOptions{Yes: true, Purge: true}); err != nil {
 		t.Fatal(err)
 	}
-	if host.hasKey {
+	if host.hasKey(KeychainService) || host.hasKey(TypeSafeKeychainService) {
 		t.Error("key kept with -purge")
 	}
 	if _, err := os.Stat(env.JevDir()); !os.IsNotExist(err) {
 		t.Error("~/.jev kept with -purge")
+	}
+}
+
+func TestInstallTypeSafeKey(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	// Both keys come from the environment and land in separate items.
+	env, host, out, _ := testEnv(t, "darwin")
+	env.Getenv = func(k string) string {
+		switch k {
+		case "ANTHROPIC_API_KEY":
+			return "sk-ant-test-0123456789"
+		case "TYPESAFE_API_KEY":
+			return "ts-test-0123456789"
+		}
+		return ""
+	}
+	if err := env.Install(ctx, InstallOptions{Yes: true, NoAgent: true, NoSettings: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !host.hasKey(KeychainService) || !host.hasKey(TypeSafeKeychainService) {
+		t.Errorf("keys = %v\n%s", host.keys, out)
+	}
+	if len(host.stdin) != 2 || !strings.Contains(host.stdin[1], "-s "+TypeSafeKeychainService+" ") ||
+		!strings.Contains(host.stdin[1], "-w ts-test-0123456789") {
+		t.Errorf("typesafe key not stored on stdin: %q", host.stdin)
+	}
+
+	// Skipping the TypeSafe prompt explains the consequence.
+	env, host, out, _ = testEnv(t, "darwin")
+	prompts := []string{}
+	env.ReadSecret = func(p string) (string, error) { prompts = append(prompts, p); return "", nil }
+	env.installKey(ctx, InstallOptions{}, env.typesafeKey())
+	if host.hasKey(TypeSafeKeychainService) || len(prompts) != 1 || !strings.HasPrefix(prompts[0], "TypeSafe API key") ||
+		!strings.Contains(out.String(), "Jev routing is off") {
+		t.Errorf("prompts=%q\n%s", prompts, out)
 	}
 }

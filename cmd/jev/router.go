@@ -24,6 +24,7 @@ func runRouter(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	cfgPath := fs.String("config", "", "path to JSON config file")
 	addr := fs.String("addr", "", "listen address (overrides config)")
 	keychain := fs.String("keychain", "", "macOS keychain service holding the API key, used when the key env var is unset")
+	tsKeychain := fs.String("typesafe-keychain", "", "macOS keychain service holding the TypeSafe API key for Jev, used when its env var is unset")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -48,6 +49,16 @@ func runRouter(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	if os.Getenv(cfg.APIKeyEnv) == "" {
 		logger.Warn("classifier API key not set; non-prefilter prompts fall back to Tier 2", "env", cfg.APIKeyEnv)
 	}
+	if err := loadKeychainKey(ctx, *tsKeychain, cfg.TypeSafeAPIKeyEnv); err != nil {
+		logger.Warn("could not read TypeSafe API key from keychain", "err", err)
+	}
+	var cls schema.Classifier = classifier.New(cfg, nil)
+	if os.Getenv(cfg.TypeSafeAPIKeyEnv) != "" {
+		cls = classifier.NewChain(classifier.NewJev(cfg, nil), cls, logger)
+		logger.Info("jev classifier enabled; LLM classifier is the fallback", "model", cfg.TypeSafeModel, "min_confidence", cfg.JevMinConfidence)
+	} else {
+		logger.Info("TypeSafe API key not set; using the LLM classifier only", "env", cfg.TypeSafeAPIKeyEnv)
+	}
 
 	if cfg.Capacity5h == 0 && cfg.Capacity7d == 0 {
 		logger.Info("no quota capacities configured; usage is recorded but throttling is off")
@@ -58,7 +69,7 @@ func runRouter(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	usage := router.NewCountingUsage(cfg, clock)
 	eng := router.New(cfg, router.Deps{
 		Prefilter:  prefilter.New(cfg),
-		Classifier: classifier.New(cfg, nil),
+		Classifier: cls,
 		Sessions:   sessions,
 		Usage:      usage,
 		Clock:      clock,

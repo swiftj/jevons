@@ -2,7 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   launchd user agent for the Jev daemon, written by `jev install`.
-  The API key comes from the login keychain (service "{{xml .Keychain}}"), never this file.
+  API keys come from the login keychain (services "{{xml .Keychain}}" and
+  "{{xml .TypeSafeKeychain}}"), never this file.
 -->
 <plist version="1.0">
 <dict>
@@ -14,6 +15,8 @@
 		<string>router</string>
 		<string>-keychain</string>
 		<string>{{xml .Keychain}}</string>
+		<string>-typesafe-keychain</string>
+		<string>{{xml .TypeSafeKeychain}}</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

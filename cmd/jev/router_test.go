@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -63,6 +65,7 @@ func post(t *testing.T, url, body string) *http.Response {
 
 func TestDaemonEndToEnd(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("TYPESAFE_API_KEY", "")
 	t.Setenv("JEV_CAPACITY_5H", "1000")
 	addr := freeAddr(t)
 	base := "http://" + addr
@@ -139,5 +142,61 @@ func TestRunFlagsAndErrors(t *testing.T) {
 	}
 	if err := runRouter(ctx, []string{"-addr", "0.0.0.0:0"}, &out, &errOut); !errors.Is(err, proxy.ErrNonLoopback) {
 		t.Errorf("non-loopback: %v", err)
+	}
+}
+
+func TestDaemonRoutesWithJev(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("TYPESAFE_API_KEY", "ts-test-key-not-real")
+	jev := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer ts-test-key-not-real" {
+			http.Error(w, "bad request", http.StatusUnauthorized)
+			return
+		}
+		_, _ = io.WriteString(w, `{"model":"jev-1.14.0","answers":{
+"task_tier":{"type":"choice","choice":"TIER_3","confidence":0.9},
+"effort":{"type":"score","score":2,"confidence":0.9}}}`) // test server write
+	}))
+	defer jev.Close()
+	t.Setenv("JEV_TYPESAFE_BASE_URL", jev.URL)
+	addr := freeAddr(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	logs := &syncBuffer{}
+	done := make(chan error, 1)
+	go func() { done <- runRouter(ctx, []string{"-addr", addr}, &bytes.Buffer{}, logs) }()
+
+	var d schema.RoutingDecision
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+addr+"/route",
+			strings.NewReader(`{"prompt":"design a sharded cache layer for the billing service"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			derr := json.NewDecoder(resp.Body).Decode(&d)
+			resp.Body.Close()
+			if derr != nil {
+				t.Fatalf("decode: %v", derr)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("daemon never answered: %v\n%s", err, logs)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if d.Source != schema.SourceJev || d.TaskTier != schema.Tier3 || d.EffortLevel != schema.EffortHigh {
+		t.Errorf("decision = %+v\n%s", d, logs)
+	}
+	if !strings.Contains(logs.String(), "jev classifier enabled") || strings.Contains(logs.String(), "ts-test-key") {
+		t.Errorf("logs:\n%s", logs)
+	}
+	cancel()
+	if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
+		t.Errorf("runRouter: %v", err)
 	}
 }

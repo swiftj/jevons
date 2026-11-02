@@ -32,6 +32,16 @@ curl -s -X POST 127.0.0.1:8942/route -d '{"prompt":"/cleanup src"}'
 falling back to Tier 2) → the `claude` CLI default. It writes a log per run to `~/.jev/logs/`
 (0600, rotated to 200 files) and exits with the child's exit code.
 
+It runs `claude -p --output-format json`, so it also:
+
+- **Reports usage** — the run's total tokens (input + output + cache) go to the daemon's
+  `/usage` endpoint, feeding the quota throttle. Skipped silently when the daemon isn't running;
+  disable with `-report=false`.
+- **Escalates** — when `-route` picked a Tier 1 model and the run fails (non-zero exit or
+  `is_error: true`), it asks the daemon to escalate and retries once on the Tier 2 model (the
+  local Tier 2 model if the daemon can't). Timeouts and explicit `-model` / `-tier` runs are not
+  retried. Disable with `-escalate=false`.
+
 ## Endpoints (loopback only)
 
 | Method & path | Body | Returns |

@@ -1,21 +1,21 @@
 // Command jev-runner executes a headless `claude -p` skill run, optionally
-// asking the jev-router daemon which model to use.
+// asking the jev-router daemon which model to use, reporting token usage back
+// to it, and retrying once on Tier 2 when a routed Tier 1 run fails.
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"net/http"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/johnswift/jevons/internal/client"
 	"github.com/johnswift/jevons/internal/config"
 	"github.com/johnswift/jevons/internal/runner"
 	"github.com/johnswift/jevons/pkg/schema"
@@ -24,37 +24,48 @@ import (
 var version = "dev"
 
 func main() {
-	code, err := run(os.Args[1:])
+	code, err := run(os.Args[1:], os.Stdout, os.Stderr)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "jev-runner:", err)
 	}
 	os.Exit(code)
 }
 
-func run(args []string) (int, error) {
+// options are the parsed command-line flags.
+type options struct {
+	skill, prompt, model, tier, dir, cfgPath string
+	timeout                                  time.Duration
+	route, notify, report, escalate          bool
+}
+
+func run(args []string, stdout, stderr io.Writer) (int, error) {
 	fs := flag.NewFlagSet("jev-runner", flag.ContinueOnError)
-	skill := fs.String("skill", "", "skill / slash command to run, e.g. /cleanup (required)")
-	prompt := fs.String("prompt", "", "prompt text appended to the skill")
-	model := fs.String("model", "", "explicit model ID")
-	tier := fs.String("tier", "", "model tier: TIER_1, TIER_2, or TIER_3")
-	dir := fs.String("dir", "", "working directory for the run")
-	timeout := fs.Duration("timeout", 0, "run timeout (default from config)")
-	route := fs.Bool("route", false, "ask the jev-router daemon to pick the model")
-	notify := fs.Bool("notify", true, "send a desktop notification on completion")
-	cfgPath := fs.String("config", "", "path to JSON config file")
+	fs.SetOutput(stderr)
+	var o options
 	showVersion := fs.Bool("version", false, "print version and exit")
+	fs.StringVar(&o.skill, "skill", "", "skill / slash command to run, e.g. /cleanup (required)")
+	fs.StringVar(&o.prompt, "prompt", "", "prompt text appended to the skill")
+	fs.StringVar(&o.model, "model", "", "explicit model ID")
+	fs.StringVar(&o.tier, "tier", "", "model tier: TIER_1, TIER_2, or TIER_3")
+	fs.StringVar(&o.dir, "dir", "", "working directory for the run")
+	fs.DurationVar(&o.timeout, "timeout", 0, "run timeout (default from config)")
+	fs.BoolVar(&o.route, "route", false, "ask the jev-router daemon to pick the model")
+	fs.BoolVar(&o.escalate, "escalate", true, "with -route, retry once on Tier 2 if a Tier 1 run fails")
+	fs.BoolVar(&o.report, "report", true, "report token usage to the jev-router daemon")
+	fs.BoolVar(&o.notify, "notify", true, "send a desktop notification on completion")
+	fs.StringVar(&o.cfgPath, "config", "", "path to JSON config file")
 	if err := fs.Parse(args); err != nil {
 		return 2, err
 	}
 	if *showVersion {
-		fmt.Println(version)
+		fmt.Fprintln(stdout, version)
 		return 0, nil
 	}
-	if *skill == "" {
+	if o.skill == "" {
 		return 2, errors.New("-skill is required")
 	}
 
-	cfg, err := config.Load(*cfgPath)
+	cfg, err := config.Load(o.cfgPath)
 	if err != nil {
 		return 1, err
 	}
@@ -62,25 +73,47 @@ func run(args []string) (int, error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	selected, err := resolveModel(ctx, cfg, *model, *tier, *route, strings.TrimSpace(*skill+" "+*prompt))
+	var ropt runner.Options
+	if o.notify {
+		ropt.Notifier = runner.NewDesktopNotifier()
+	}
+	f := &flow{
+		cfg:    cfg,
+		runner: runner.New(cfg, ropt),
+		daemon: client.New(cfg.ListenAddr, nil),
+		out:    stdout,
+		errOut: stderr,
+	}
+	return f.execute(ctx, o)
+}
+
+// flow orchestrates one jev-runner invocation against injectable dependencies.
+type flow struct {
+	cfg    config.Config
+	runner schema.Runner
+	daemon *client.Client
+	out    io.Writer
+	errOut io.Writer
+}
+
+// execute resolves the model, runs, reports usage, and escalates a failed
+// routed Tier 1 run once. It returns the process exit code.
+func (f *flow) execute(ctx context.Context, o options) (int, error) {
+	prompt := strings.TrimSpace(o.skill + " " + o.prompt)
+	model, decision, err := f.resolveModel(ctx, o, prompt)
 	if err != nil {
 		return 2, err
 	}
 
-	var opt runner.Options
-	if *notify {
-		opt.Notifier = runner.NewDesktopNotifier()
-	}
-	res, runErr := runner.New(cfg, opt).Run(ctx, schema.RunRequest{
-		Skill:   *skill,
-		Prompt:  *prompt,
-		Model:   selected,
-		WorkDir: *dir,
-		Timeout: *timeout,
-	})
+	req := schema.RunRequest{Skill: o.skill, Prompt: o.prompt, Model: model, WorkDir: o.dir, Timeout: o.timeout}
+	res, runErr := f.runOnce(ctx, req, o.report)
 
-	fmt.Printf("run_id=%s model=%s exit=%d duration=%s log=%s\n",
-		res.RunID, displayModel(selected), res.ExitCode, res.Duration.Round(time.Millisecond), res.LogPath)
+	if o.escalate && decision != nil && decision.TaskTier == schema.Tier1 && errors.Is(runErr, schema.ErrRunFailed) {
+		req.Model = f.escalatedModel(ctx, *decision, runErr)
+		fmt.Fprintf(f.errOut, "jev-runner: Tier 1 run failed; retrying on %s\n", req.Model)
+		res, runErr = f.runOnce(ctx, req, o.report)
+	}
+
 	if runErr == nil {
 		return 0, nil
 	}
@@ -90,54 +123,53 @@ func run(args []string) (int, error) {
 	return 1, runErr
 }
 
-// resolveModel picks the model by precedence: -model, -tier, -route, then the
-// claude CLI default (empty string).
-func resolveModel(ctx context.Context, cfg config.Config, model, tier string, route bool, prompt string) (string, error) {
-	switch {
-	case model != "":
-		return model, nil
-	case tier != "":
-		t := schema.Tier(tier)
-		if !t.Valid() {
-			return "", fmt.Errorf("unknown tier %q", tier)
+// runOnce runs req, prints a summary line, and reports token usage.
+func (f *flow) runOnce(ctx context.Context, req schema.RunRequest, report bool) (schema.RunResult, error) {
+	res, err := f.runner.Run(ctx, req)
+	fmt.Fprintf(f.out, "run_id=%s model=%s exit=%d tokens=%d duration=%s log=%s\n",
+		res.RunID, displayModel(req.Model), res.ExitCode, res.Tokens, res.Duration.Round(time.Millisecond), res.LogPath)
+	if report && res.Tokens > 0 {
+		// Usage reporting is best effort; a missing daemon is not worth a warning.
+		if rerr := f.daemon.ReportUsage(ctx, res.Tokens); rerr != nil && !errors.Is(rerr, client.ErrUnreachable) {
+			fmt.Fprintf(f.errOut, "jev-runner: usage not reported: %v\n", rerr)
 		}
-		return cfg.ModelFor(t), nil
-	case route:
-		d, err := askRouter(ctx, cfg.ListenAddr, prompt)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "jev-runner: router unreachable (%v); using %s\n", err, schema.Tier2)
-			return cfg.ModelFor(schema.Tier2), nil
-		}
-		return d.SelectedModel, nil
 	}
-	return "", nil
+	return res, err
 }
 
-func askRouter(ctx context.Context, addr, prompt string) (schema.RoutingDecision, error) {
-	body, err := json.Marshal(schema.RouteRequest{Prompt: prompt})
+// resolveModel picks the model by precedence: -model, -tier, -route, then the
+// claude CLI default (empty string). The decision is non-nil only when the
+// daemon chose the model.
+func (f *flow) resolveModel(ctx context.Context, o options, prompt string) (string, *schema.RoutingDecision, error) {
+	switch {
+	case o.model != "":
+		return o.model, nil, nil
+	case o.tier != "":
+		t := schema.Tier(o.tier)
+		if !t.Valid() {
+			return "", nil, fmt.Errorf("unknown tier %q", o.tier)
+		}
+		return f.cfg.ModelFor(t), nil, nil
+	case o.route:
+		d, err := f.daemon.Route(ctx, schema.RouteRequest{Prompt: prompt})
+		if err != nil {
+			fmt.Fprintf(f.errOut, "jev-runner: router unavailable (%v); using %s\n", err, schema.Tier2)
+			return f.cfg.ModelFor(schema.Tier2), nil, nil
+		}
+		return d.SelectedModel, &d, nil
+	}
+	return "", nil, nil
+}
+
+// escalatedModel asks the daemon to escalate prev, falling back to the local
+// Tier 2 model when the daemon cannot.
+func (f *flow) escalatedModel(ctx context.Context, prev schema.RoutingDecision, cause error) string {
+	d, err := f.daemon.Escalate(ctx, prev, cause.Error())
 	if err != nil {
-		return schema.RoutingDecision{}, err
+		fmt.Fprintf(f.errOut, "jev-runner: escalation via router failed (%v); using local %s\n", err, schema.Tier2)
+		return f.cfg.ModelFor(schema.Tier2)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+addr+"/route", bytes.NewReader(body))
-	if err != nil {
-		return schema.RoutingDecision{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return schema.RoutingDecision{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return schema.RoutingDecision{}, fmt.Errorf("status %d", resp.StatusCode)
-	}
-	var d schema.RoutingDecision
-	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
-		return schema.RoutingDecision{}, err
-	}
-	return d, d.Validate()
+	return d.SelectedModel
 }
 
 func displayModel(m string) string {

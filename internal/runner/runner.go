@@ -108,7 +108,7 @@ func BuildArgs(prompt, model string) []string {
 	if model != "" {
 		args = append(args, "--model", model)
 	}
-	return append(args, "--output-format", "text")
+	return append(args, "--output-format", "json")
 }
 
 // Run executes one headless run. A non-zero exit returns a populated result
@@ -207,12 +207,15 @@ func (r *Runner) execute(ctx context.Context, req schema.RunRequest, timeout tim
 	if cmd.ProcessState != nil {
 		res.ExitCode = cmd.ProcessState.ExitCode()
 	}
+	_, reportedErr := applyResult(res)
 
 	switch {
 	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
 		return fmt.Errorf("runner: run %s exceeded %s: %w", res.RunID, timeout, schema.ErrTimeout)
 	case ctx.Err() != nil:
 		return fmt.Errorf("runner: run %s: %w", res.RunID, ctx.Err())
+	case err == nil && reportedErr:
+		return fmt.Errorf("runner: run %s: claude reported an error: %w", res.RunID, schema.ErrRunFailed)
 	case err == nil:
 		return nil
 	}

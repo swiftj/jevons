@@ -56,7 +56,12 @@ golangci-lint v2 config enabling: `errcheck`, `govet`, `staticcheck`, `ineffassi
   `cfg.Models`), `-dir`, `-timeout`, `-route` (ask the router daemon at `ListenAddr` to pick
   the model via `POST /route`; fall back to Tier 2 if the daemon is unreachable), `-notify`
   (default true), `-config`, `-version`.
-- Prints run ID, exit code, duration, and log path; exits with the child's exit code.
+- `-report` (default true): POST the run's `Tokens` to the daemon's `/usage`; silent if unreachable.
+- `-escalate` (default true): when `-route` chose a Tier 1 model and the run fails with
+  `ErrRunFailed`, call `POST /escalate` (falling back to the local Tier 2 model) and retry once.
+- Daemon calls go through `internal/client` (Route, Escalate, ReportUsage; `ErrUnreachable`).
+- Prints run ID, model, exit code, tokens, duration, and log path per run; exits with the
+  final run's exit code.
 
 ## F. CI — `.github/workflows/ci.yml` (Wave 3)
 

@@ -56,6 +56,11 @@ func TestHelperProcess(_ *testing.T) {
 		fmt.Fprint(os.Stdout, tailMarker)
 	case "stderr":
 		fmt.Fprint(os.Stderr, "only stderr")
+	case "json-ok":
+		fmt.Fprint(os.Stdout, `{"type":"result","is_error":false,"result":"done","session_id":"s-1",`+
+			`"usage":{"input_tokens":10,"output_tokens":20,"cache_creation_input_tokens":30,"cache_read_input_tokens":40}}`)
+	case "json-error":
+		fmt.Fprint(os.Stdout, `{"type":"result","is_error":true,"result":"bad","usage":{"input_tokens":5,"output_tokens":1}}`)
 	case "hang":
 		time.Sleep(time.Minute)
 	default:
@@ -150,7 +155,7 @@ func TestRunSuccess(t *testing.T) {
 	if h.RunID != res.RunID || h.Skill != "/daily" || h.Model != "m1" {
 		t.Fatalf("header %+v", h)
 	}
-	wantArgv := []string{"claude-fake", "-p", "/daily go", "--model", "m1", "--output-format", "text"}
+	wantArgv := []string{"claude-fake", "-p", "/daily go", "--model", "m1", "--output-format", "json"}
 	if strings.Join(h.Argv, "|") != strings.Join(wantArgv, "|") {
 		t.Fatalf("argv %v", h.Argv)
 	}
@@ -181,9 +186,9 @@ func TestRunArgvAndWorkDir(t *testing.T) {
 		req  schema.RunRequest
 		want []string
 	}{
-		{"skill only", schema.RunRequest{Skill: "/s", WorkDir: wd}, []string{"claude-fake", "-p", "/s", "--output-format", "text"}},
-		{"prompt only", schema.RunRequest{Prompt: "do it; rm -rf / \"$(x)\"", WorkDir: wd}, []string{"claude-fake", "-p", "do it; rm -rf / \"$(x)\"", "--output-format", "text"}},
-		{"both with model", schema.RunRequest{Skill: "/s", Prompt: "p", Model: "m", WorkDir: wd}, []string{"claude-fake", "-p", "/s p", "--model", "m", "--output-format", "text"}},
+		{"skill only", schema.RunRequest{Skill: "/s", WorkDir: wd}, []string{"claude-fake", "-p", "/s", "--output-format", "json"}},
+		{"prompt only", schema.RunRequest{Prompt: "do it; rm -rf / \"$(x)\"", WorkDir: wd}, []string{"claude-fake", "-p", "do it; rm -rf / \"$(x)\"", "--output-format", "json"}},
+		{"both with model", schema.RunRequest{Skill: "/s", Prompt: "p", Model: "m", WorkDir: wd}, []string{"claude-fake", "-p", "/s p", "--model", "m", "--output-format", "json"}},
 	}
 	for _, tc := range tests {
 		res, err := r.Run(context.Background(), tc.req)

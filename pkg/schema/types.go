@@ -151,4 +151,8 @@ type RunResult struct {
 	Stderr   string        `json:"stderr"`
 	Duration time.Duration `json:"duration"`
 	LogPath  string        `json:"log_path"`
+	// Tokens is the total usage claude reported (0 when output was not JSON).
+	Tokens int64 `json:"tokens,omitempty"`
+	// SessionID is the claude session ID from JSON output, when present.
+	SessionID string `json:"session_id,omitempty"`
 }

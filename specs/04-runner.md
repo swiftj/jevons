@@ -18,7 +18,11 @@ func New(cfg config.Config, opt Options) *Runner
 
 ## Invocation
 
-- Command: `cfg.ClaudeBin -p <prompt> [--model <model>] --output-format text`.
+- Command: `cfg.ClaudeBin -p <prompt> [--model <model>] --output-format json`.
+  - Stdout is parsed as a `{"type":"result",...}` object: `RunResult.Stdout` becomes `result`,
+    `Tokens` the sum of input, output, cache-creation and cache-read tokens, `SessionID` the
+    session ID. `is_error: true` with exit 0 wraps `schema.ErrRunFailed`. Non-JSON output is left
+    as-is with `Tokens = 0`.
   - `prompt` = `req.Skill` followed by a space and `req.Prompt` when both are present.
   - Arguments are passed as an argv slice — **never** through a shell.
 - `exec.CommandContext` with `ctx` wrapped in `context.WithTimeout(req.Timeout || cfg.RunTimeout)`.

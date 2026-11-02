@@ -36,14 +36,31 @@ const (
 	contentTypeJSON = "application/json; charset=utf-8"
 )
 
+// Feed input limits.
+const (
+	// MaxSessionIDLen caps POST /session session_id length.
+	MaxSessionIDLen = 128
+	// MaxUsageTokens caps a single POST /usage report.
+	MaxUsageTokens = 1_000_000_000
+)
+
 // ErrNonLoopback is returned by ListenAndServe when the listen address is not loopback.
 var ErrNonLoopback = errors.New("proxy: listen address is not loopback")
+
+// Feeds are optional sinks for client-reported session and usage data. A nil
+// sink makes its endpoint answer 501.
+type Feeds struct {
+	Sessions schema.SessionTracker
+	Usage    schema.UsageRecorder
+	Clock    schema.Clock // nil → schema.SystemClock{}
+}
 
 // Server is the telemetry bridge HTTP server.
 type Server struct {
 	cfg     config.Config
 	router  schema.Router
 	logger  *slog.Logger
+	feeds   Feeds
 	handler http.Handler
 
 	// onListen, when set, is called with the bound address once listening (tests).
@@ -57,6 +74,16 @@ func NewServer(cfg config.Config, r schema.Router, logger *slog.Logger) *Server 
 	}
 	s := &Server{cfg: cfg, router: r, logger: logger}
 	s.handler = s.buildHandler()
+	return s
+}
+
+// WithFeeds attaches session and usage sinks for POST /session and POST /usage.
+// Call it before serving; it is not safe to call concurrently with requests.
+func (s *Server) WithFeeds(f Feeds) *Server {
+	if f.Clock == nil {
+		f.Clock = schema.SystemClock{}
+	}
+	s.feeds = f
 	return s
 }
 
@@ -164,11 +191,15 @@ func (s *Server) buildHandler() http.Handler {
 	mux.HandleFunc("GET /status", s.handleStatus)
 	mux.HandleFunc("POST /route", s.handleRoute)
 	mux.HandleFunc("POST /escalate", s.handleEscalate)
+	mux.HandleFunc("POST /session", s.handleSession)
+	mux.HandleFunc("POST /usage", s.handleUsage)
 	// Method-agnostic fallbacks produce JSON 405s with an Allow header.
 	mux.HandleFunc("/healthz", methodNotAllowed("GET, HEAD"))
 	mux.HandleFunc("/status", methodNotAllowed("GET, HEAD"))
 	mux.HandleFunc("/route", methodNotAllowed("POST"))
 	mux.HandleFunc("/escalate", methodNotAllowed("POST"))
+	mux.HandleFunc("/session", methodNotAllowed("POST"))
+	mux.HandleFunc("/usage", methodNotAllowed("POST"))
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
@@ -308,6 +339,61 @@ func (s *Server) handleEscalate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
+}
+
+// handleSession records session activity so the router's cache-warmth rule
+// can see it. A zero or future last_activity is replaced with the current time.
+func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
+	if s.feeds.Sessions == nil {
+		writeError(w, http.StatusNotImplemented, "session feed not configured")
+		return
+	}
+	var st schema.SessionState
+	if status, msg := decodeBody(r, &st); status != 0 {
+		writeError(w, status, msg)
+		return
+	}
+	switch {
+	case strings.TrimSpace(st.SessionID) == "" || len(st.SessionID) > MaxSessionIDLen:
+		writeError(w, http.StatusBadRequest, "invalid session_id")
+		return
+	case strings.TrimSpace(st.Model) == "":
+		writeError(w, http.StatusBadRequest, "empty model")
+		return
+	case st.CachedTokens < 0:
+		writeError(w, http.StatusBadRequest, "negative cached_tokens")
+		return
+	}
+	now := s.feeds.Clock.Now()
+	if st.LastActivity.IsZero() || st.LastActivity.After(now) {
+		st.LastActivity = now
+	}
+	s.feeds.Sessions.Touch(st)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// usageReport is the POST /usage body.
+type usageReport struct {
+	Tokens int64 `json:"tokens"`
+}
+
+// handleUsage records consumed tokens for the quota throttle windows.
+func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
+	if s.feeds.Usage == nil {
+		writeError(w, http.StatusNotImplemented, "usage feed not configured")
+		return
+	}
+	var rep usageReport
+	if status, msg := decodeBody(r, &rep); status != 0 {
+		writeError(w, status, msg)
+		return
+	}
+	if rep.Tokens <= 0 || rep.Tokens > MaxUsageTokens {
+		writeError(w, http.StatusBadRequest, "tokens out of range")
+		return
+	}
+	s.feeds.Usage.Add(rep.Tokens)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // routerError maps a router error to 502/500 with a generic body. The error

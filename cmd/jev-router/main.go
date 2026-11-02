@@ -54,12 +54,18 @@ func run(args []string) error {
 		logger.Warn("classifier API key not set; non-prefilter prompts fall back to Tier 2", "env", cfg.APIKeyEnv)
 	}
 
+	if cfg.Capacity5h == 0 && cfg.Capacity7d == 0 {
+		logger.Info("no quota capacities configured; usage is recorded but throttling is off")
+	}
+
 	clock := schema.SystemClock{}
+	sessions := router.NewSessionTracker(cfg, clock)
+	usage := router.NewCountingUsage(cfg, clock)
 	eng := router.New(cfg, router.Deps{
 		Prefilter:  prefilter.New(cfg),
 		Classifier: classifier.New(cfg, nil),
-		Sessions:   router.NewSessionTracker(cfg, clock),
-		Usage:      router.NewCountingUsage(cfg, clock),
+		Sessions:   sessions,
+		Usage:      usage,
 		Clock:      clock,
 	})
 
@@ -67,5 +73,7 @@ func run(args []string) error {
 	defer stop()
 
 	logger.Info("jev-router starting", "version", version, "addr", cfg.ListenAddr)
-	return proxy.NewServer(cfg, eng, logger).ListenAndServe(ctx)
+	srv := proxy.NewServer(cfg, eng, logger).
+		WithFeeds(proxy.Feeds{Sessions: sessions, Usage: usage, Clock: clock})
+	return srv.ListenAndServe(ctx)
 }

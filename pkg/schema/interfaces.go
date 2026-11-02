@@ -31,6 +31,11 @@ type UsageSource interface {
 	Windows(ctx context.Context) ([]UsageWindow, error)
 }
 
+// UsageRecorder accepts client-reported token usage.
+type UsageRecorder interface {
+	Add(tokens int64)
+}
+
 // Router picks a model for each request.
 type Router interface {
 	Route(ctx context.Context, req RouteRequest) (RoutingDecision, error)

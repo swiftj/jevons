@@ -86,6 +86,11 @@ func TestStubErrors(t *testing.T) {
 	if err != nil || len(ws) != 1 || ws[0].Ratio() != 0.8 {
 		t.Errorf("Windows = %+v, %v", ws, err)
 	}
+	ru := &RecordingUsage{}
+	ru.Add(5)
+	if got := ru.Added(); len(got) != 1 || got[0] != 5 {
+		t.Errorf("Added = %v", got)
+	}
 	u.Set(nil, boom)
 	if _, err := u.Windows(context.Background()); !errors.Is(err, boom) {
 		t.Errorf("Windows err = %v", err)

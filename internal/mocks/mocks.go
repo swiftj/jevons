@@ -18,6 +18,7 @@ var (
 	_ schema.Classifier     = (*StubClassifier)(nil)
 	_ schema.SessionTracker = (*MemSessions)(nil)
 	_ schema.UsageSource    = (*StaticUsage)(nil)
+	_ schema.UsageRecorder  = (*RecordingUsage)(nil)
 	_ schema.Router         = (*StubRouter)(nil)
 	_ schema.Runner         = (*StubRunner)(nil)
 	_ schema.Notifier       = (*RecordingNotifier)(nil)
@@ -182,6 +183,26 @@ func (u *StaticUsage) Windows(context.Context) ([]schema.UsageWindow, error) {
 		return nil, u.err
 	}
 	return append([]schema.UsageWindow(nil), u.windows...), nil
+}
+
+// RecordingUsage records every Add call.
+type RecordingUsage struct {
+	mu    sync.Mutex
+	added []int64
+}
+
+// Add records tokens.
+func (u *RecordingUsage) Add(tokens int64) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.added = append(u.added, tokens)
+}
+
+// Added returns a copy of recorded token counts.
+func (u *RecordingUsage) Added() []int64 {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return append([]int64(nil), u.added...)
 }
 
 // EscalateCall records one Escalate invocation.

@@ -84,6 +84,7 @@ golangci-lint v2 config enabling: `errcheck`, `govet`, `staticcheck`, `ineffassi
 
 ## Open Questions (resolve before or during Wave 3)
 
-1. **Usage source for 5h/7d windows** — no API is specified. Default: config-supplied capacities
-   plus counters accumulated from routed traffic. Confirm whether to read a real source.
-2. **Module path** — `github.com/johnswift/jevons` assumed.
+1. **Usage source for 5h/7d windows** — resolved: clients report tokens via `POST /usage` into
+   `router.CountingUsage`; capacities come from config (`0` disables throttling for a window).
+   Sessions are reported via `POST /session`. Reading Anthropic's own usage data is future work.
+2. **Module path** — `github.com/johnswift/jevons` (resolved).

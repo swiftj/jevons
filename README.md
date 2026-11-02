@@ -40,6 +40,8 @@ falling back to Tier 2) → the `claude` CLI default. It writes a log per run to
 | `GET /status` | — | routing counts, usage windows, warm sessions, throttle flag |
 | `POST /route` | `{"prompt", "task_id"?, "session_id"?, "essential"?}` | routing decision |
 | `POST /escalate` | `{"decision": <decision>, "cause": "..."}` | Tier 2 decision |
+| `POST /session` | `{"session_id", "model", "cached_tokens", "last_activity"?}` | `{"ok":true}` |
+| `POST /usage` | `{"tokens": n}` | `{"ok":true}` |
 
 Non-loopback `Host` headers get 421; cross-origin requests are allowed only from `null`,
 `file://`, and loopback origins.
@@ -63,10 +65,20 @@ Defaults, then an optional JSON file (`-config path.json`), then `JEV_*` environ
 | `run_timeout` | — | `30m` |
 | `log_dir` / `log_max_files` | `JEV_LOG_DIR` / — | `~/.jev/logs` / `200` |
 
-## Known limitation
+## Feeding cache-warmth and quota data
 
-The daemon has no feed for session activity or token usage yet, so the cache-warmth and
-quota-throttle rules are implemented and tested but inactive at runtime.
+The router only knows what clients tell it. Report session activity and token usage so the
+cache-warmth and quota-throttle rules can act:
+
+```bash
+curl -s -X POST 127.0.0.1:8942/session \
+  -d '{"session_id":"chat-1","model":"claude-sonnet-5-5","cached_tokens":150000}'
+curl -s -X POST 127.0.0.1:8942/usage -d '{"tokens":42000}'
+```
+
+A session counts as warm when it holds more than 100k cached tokens and was active in the last
+50 minutes; a `/route` call carrying that `session_id` then reuses it. Throttling also needs
+`capacity_5h` and/or `capacity_7d` set; at 0 that window is ignored.
 
 ## Development
 

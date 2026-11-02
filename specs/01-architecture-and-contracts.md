@@ -214,6 +214,8 @@ All mocks must be safe for concurrent use (`sync.Mutex`).
 
 ## 7. Wave 1 Additions (as built — authoritative over the sketches above)
 
+- `schema.UsageRecorder { Add(tokens int64) }` — implemented by `router.CountingUsage`,
+  faked by `mocks.RecordingUsage`; fed by `POST /usage` (spec 05).
 - `schema.NewID()` — 16-char crypto-random hex; use for TaskID / RunID.
 - `schema.SystemClock{}` — real `Clock`. `Tier.Valid()`, `Effort.Valid()` helpers.
 - `StatusSnapshot.UsageErrors int64` — count of failed `UsageSource.Windows` calls.

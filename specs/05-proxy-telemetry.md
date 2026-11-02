@@ -31,6 +31,12 @@ func (s *Server) ListenAndServe(ctx context.Context) error // blocks; graceful s
 | `POST /route` | Body `schema.RouteRequest` → `Router.Route` → `200` + `RoutingDecision` |
 | `POST /escalate` | Body `{"decision": RoutingDecision, "cause": string}` → `Router.Escalate` |
 | `GET /healthz` | `200 {"ok":true}` — no router call |
+| `POST /session` | Body `schema.SessionState` → `Feeds.Sessions.Touch`. Zero/future `last_activity` → now. 400 on empty/>128-char `session_id`, empty `model`, negative `cached_tokens` |
+| `POST /usage` | Body `{"tokens": n}`, `1 ≤ n ≤ 1e9` → `Feeds.Usage.Add(n)` |
+
+Feeds are attached with `(*Server).WithFeeds(proxy.Feeds{Sessions, Usage, Clock})`; an unset
+sink makes its endpoint return `501`. These endpoints feed the router's cache-warmth and quota
+throttle rules, which have no other data source.
 
 - Wrong method → `405` with `Allow` header. Unknown path → `404`.
 - Malformed JSON / empty prompt → `400 {"error": "..."}`.

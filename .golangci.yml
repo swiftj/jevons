@@ -1,0 +1,28 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - forbidigo
+    - gosec
+    - noctx
+    - revive
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^os\.Exit$
+        - pattern: ^log\.Fatal.*$
+        - pattern: ^fmt\.Print.*$
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: ^cmd/
+        linters: [forbidigo]
+      - path: _test\.go
+        linters: [forbidigo, gosec, noctx, bodyclose]
+formatters:
+  enable:
+    - gofmt
+    - goimports

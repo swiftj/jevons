@@ -28,8 +28,8 @@ type claudeResult struct {
 // left untouched. It reports whether the output parsed and whether claude
 // flagged the run as an error.
 func applyResult(res *schema.RunResult) (parsed, isError bool) {
-	var cr claudeResult
-	if err := json.Unmarshal([]byte(strings.TrimSpace(res.Stdout)), &cr); err != nil || cr.Type != "result" {
+	cr, ok := parseResult(res.Stdout)
+	if !ok {
 		return false, false
 	}
 	u := cr.Usage
@@ -37,4 +37,25 @@ func applyResult(res *schema.RunResult) (parsed, isError bool) {
 	res.Tokens = u.InputTokens + u.OutputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
 	res.SessionID = cr.SessionID
 	return true, cr.IsError
+}
+
+// parseResult decodes stdout as a claude result object. claude may print
+// warnings to stdout before the JSON (e.g. "claude.ai connectors are disabled"
+// when ANTHROPIC_API_KEY is set), so if the whole output does not parse, the
+// last line is tried on its own.
+func parseResult(stdout string) (claudeResult, bool) {
+	s := strings.TrimSpace(stdout)
+	var cr claudeResult
+	if err := json.Unmarshal([]byte(s), &cr); err == nil && cr.Type == "result" {
+		return cr, true
+	}
+	i := strings.LastIndexByte(s, '\n')
+	if i < 0 {
+		return claudeResult{}, false
+	}
+	cr = claudeResult{}
+	if err := json.Unmarshal([]byte(s[i+1:]), &cr); err != nil || cr.Type != "result" {
+		return claudeResult{}, false
+	}
+	return cr, true
 }

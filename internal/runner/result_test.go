@@ -26,6 +26,14 @@ func TestApplyResult(t *testing.T) {
 		{"json array", `["a"]`, false, false, `["a"]`, 0, ""},
 		{"other type", `{"type":"system","result":"x"}`, false, false, `{"type":"system","result":"x"}`, 0, ""},
 		{"empty", "", false, false, "", 0, ""},
+		// Real `claude -p "say ok" --output-format json --model claude-haiku-5-5`
+		// output (trimmed), with the warning claude prints to stdout when
+		// ANTHROPIC_API_KEY is set.
+		{"real with warning", "⚠ claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set\n" +
+			`{"duration_api_ms":1185,"stop_reason":"end_turn","session_id":"sess-1","total_cost_usd":0.0038192,"usage":{"input_tokens":2,"cache_creation_input_tokens":30296,"cache_read_input_tokens":0,"output_tokens":64,"output_tokens_details":{"thinking_tokens":60},"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":30296}},"is_error":false,"num_turns":1,"subtype":"success","result":"ok","type":"result"}` + "\n",
+			true, false, "ok", 30362, "sess-1"},
+		{"warning then text", "⚠ warning\nhello", false, false, "", 0, ""},
+		{"warning then non-result", "⚠ warning\n" + `{"type":"system"}`, false, false, "", 0, ""},
 	}
 	for _, tc := range cases {
 		res := schema.RunResult{Stdout: tc.stdout}

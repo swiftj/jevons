@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 func TestDefaultIsValid(t *testing.T) {

@@ -2,6 +2,7 @@
 paths:
   - "internal/proxy/**"
   - "internal/classifier/**"
+  - "internal/client/**"
   - "internal/config/**"
 ---
 # Network & Secrets Rules

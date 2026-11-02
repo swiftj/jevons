@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnswift/jevons/internal/config"
-	"github.com/johnswift/jevons/internal/mocks"
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/internal/config"
+	"github.com/swiftj/jevons/internal/mocks"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 func validDecision() schema.RoutingDecision {

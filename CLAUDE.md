@@ -48,17 +48,24 @@ automatically when you touch matching files.
 | `specs/02-prefilter-and-classifier.md` | `internal/prefilter`, `internal/classifier` | Wave 2-A |
 | `specs/03-router.md` | `internal/router` pipeline, warmth, throttle, escalation | Wave 2-B |
 | `specs/04-runner.md` | `internal/runner`, logs, rotation, notifications | Wave 2-C |
-| `specs/05-proxy-telemetry.md` | `internal/proxy` HTTP endpoints & hardening | Wave 2-D |
-| `specs/06-release-and-ci.md` | Makefile, `cmd/*`, CI, release, verification | Wave 1 scaffold; Wave 3 |
+| `specs/05-proxy-telemetry.md` | `internal/proxy` endpoints (incl. `/session`, `/usage` feeds) & hardening | Wave 2-D |
+| `specs/06-release-and-ci.md` | Makefile, `cmd/*`, `internal/client`, CI, release, verification | Wave 1 scaffold; Wave 3 |
 
 | Rule file | Applies to |
 |-----------|-----------|
 | `.claude/rules/go-core.md` | `internal/**/*.go`, `pkg/**/*.go` |
 | `.claude/rules/process-and-cli.md` | `cmd/**`, `internal/runner/**` |
-| `.claude/rules/network-security.md` | `internal/proxy/**`, `internal/classifier/**`, `internal/config/**` |
+| `.claude/rules/network-security.md` | `internal/proxy/**`, `internal/classifier/**`, `internal/client/**`, `internal/config/**` |
 | `.claude/rules/testing.md` | `**/*_test.go`, `internal/mocks/**` |
 
-## 3-Wave Execution Plan
+## Status
+
+All three waves are complete. Since then: `POST /session` + `POST /usage` feeds (spec 05),
+and `jev-runner` usage reporting + Tier 1 → Tier 2 auto-escalation via `internal/client` (spec 06).
+For new work, keep the ownership boundaries below: change `pkg/schema` / `internal/config` /
+`internal/mocks` first, gate, then edit implementation packages in parallel.
+
+## 3-Wave Execution Plan (reference)
 
 ### Wave 1 — Contract Lock (lead only, synchronous)
 
@@ -87,7 +94,7 @@ Every Wave 2 agent:
 
 ### Wave 3 — Integration & Release (lead, synchronous)
 
-Owns: `cmd/**`, `Makefile` completion, `.github/workflows/**`, `README.md`.
+Owns: `cmd/**`, `internal/client/**`, `Makefile` completion, `.github/workflows/**`, `README.md`.
 Spec: sections D–H of `specs/06`.
 
 1. Wire `cmd/jev-router` and `cmd/jev-runner` from Wave 2 packages.

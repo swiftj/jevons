@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/johnswift/jevons/internal/config"
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/internal/config"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 const (

@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 // DefaultTimeout bounds each request when no http.Client is supplied.

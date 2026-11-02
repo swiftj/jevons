@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/johnswift/jevons/internal/mocks"
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/internal/mocks"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 func countLogs(t *testing.T, dir string) int {

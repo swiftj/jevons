@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnswift/jevons/internal/config"
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/internal/config"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 const (
@@ -184,8 +184,8 @@ func TestClassify(t *testing.T) {
 		if hdr.Get("x-api-key") != testKey || hdr.Get("anthropic-version") != "2023-06-01" || hdr.Get("content-type") != "application/json" {
 			t.Errorf("headers = %v", hdr)
 		}
-		if got.Model != cfg.ClassifierModel || got.MaxTokens != 200 || got.Temperature != 0 {
-			t.Errorf("model/max_tokens/temperature = %s/%d/%v", got.Model, got.MaxTokens, got.Temperature)
+		if got.Model != cfg.ClassifierModel || got.MaxTokens != 200 {
+			t.Errorf("model/max_tokens = %s/%d", got.Model, got.MaxTokens)
 		}
 		if len(got.System) != 1 || got.System[0].Type != "text" || got.System[0].Text != SystemPrompt || got.System[0].CacheControl.Type != "ephemeral" {
 			t.Errorf("system = %+v", got.System)
@@ -195,7 +195,7 @@ func TestClassify(t *testing.T) {
 		}
 	})
 
-	t.Run("temperature serialized explicitly", func(t *testing.T) {
+	t.Run("temperature omitted", func(t *testing.T) {
 		var body string
 		f := newFake(t, func(w http.ResponseWriter, r *http.Request) {
 			b, err := io.ReadAll(r.Body)
@@ -208,8 +208,9 @@ func TestClassify(t *testing.T) {
 		if _, err := newClient(testConfig(f.srv.URL)).Classify(context.Background(), schema.RouteRequest{Prompt: "x"}); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(body, `"temperature":0`) {
-			t.Errorf("temperature missing from body: %s", body)
+		// Current models reject temperature with a 400.
+		if strings.Contains(body, `"temperature"`) {
+			t.Errorf("temperature sent: %s", body)
 		}
 	})
 
@@ -378,5 +379,26 @@ func blockUntilGone(r *http.Request) {
 	select {
 	case <-r.Context().Done():
 	case <-time.After(2 * time.Second):
+	}
+}
+
+func TestAPIErrorTypeSurfaced(t *testing.T) {
+	t.Setenv(testKeyEnv, testKey)
+	cases := map[string]struct{ body, want string }{
+		"typed":   {`{"type":"error","error":{"type":"invalid_request_error","message":"secret echo"}}`, "http status 400 (invalid_request_error)"},
+		"untyped": {`not json`, "http status 400"},
+	}
+	for name, tc := range cases {
+		f := newFake(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, tc.body)
+		})
+		_, err := newClient(testConfig(f.srv.URL)).Classify(context.Background(), schema.RouteRequest{Prompt: "x"})
+		if !errors.Is(err, schema.ErrClassifierUnavailable) || !strings.HasSuffix(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v", name, err)
+		}
+		if strings.Contains(err.Error(), "secret echo") {
+			t.Errorf("%s: API message leaked: %v", name, err)
+		}
 	}
 }

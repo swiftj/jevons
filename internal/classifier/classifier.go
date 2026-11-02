@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/johnswift/jevons/internal/config"
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/internal/config"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 const (
@@ -67,11 +67,10 @@ type message struct {
 }
 
 type messagesRequest struct {
-	Model       string        `json:"model"`
-	MaxTokens   int           `json:"max_tokens"`
-	Temperature float64       `json:"temperature"`
-	System      []systemBlock `json:"system"`
-	Messages    []message     `json:"messages"`
+	Model     string        `json:"model"`
+	MaxTokens int           `json:"max_tokens"`
+	System    []systemBlock `json:"system"`
+	Messages  []message     `json:"messages"`
 }
 
 type messagesResponse struct {
@@ -101,9 +100,8 @@ func (c *Client) Classify(ctx context.Context, req schema.RouteRequest) (schema.
 	}
 
 	body, err := json.Marshal(messagesRequest{
-		Model:       c.cfg.ClassifierModel,
-		MaxTokens:   MaxTokens,
-		Temperature: 0,
+		Model:     c.cfg.ClassifierModel,
+		MaxTokens: MaxTokens,
 		System: []systemBlock{{
 			Type:         "text",
 			Text:         SystemPrompt,
@@ -197,7 +195,7 @@ func (c *Client) do(ctx context.Context, key string, body []byte) (text string, 
 
 	if resp.StatusCode != http.StatusOK {
 		retry = resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
-		return "", retry, fmt.Errorf("classifier: %w: http status %d", schema.ErrClassifierUnavailable, resp.StatusCode)
+		return "", retry, fmt.Errorf("classifier: %w: http status %d%s", schema.ErrClassifierUnavailable, resp.StatusCode, apiErrorType(resp.Body))
 	}
 
 	var mr messagesResponse
@@ -249,4 +247,19 @@ func truncateUTF8(s string, n int) string {
 		cut--
 	}
 	return s[:cut]
+}
+
+// apiErrorType returns " (<type>)" from an Anthropic error body such as
+// {"error":{"type":"invalid_request_error"}}, or "" when absent. Only the type
+// is surfaced; the message is dropped since it could echo request content.
+func apiErrorType(body io.Reader) string {
+	var e struct {
+		Error struct {
+			Type string `json:"type"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(io.LimitReader(body, maxResponseBytes)).Decode(&e); err != nil || e.Error.Type == "" {
+		return ""
+	}
+	return " (" + e.Error.Type + ")"
 }

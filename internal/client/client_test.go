@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 func decision(tier schema.Tier) schema.RoutingDecision {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 // Config is the complete runtime configuration.

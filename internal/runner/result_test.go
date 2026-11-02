@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/johnswift/jevons/internal/mocks"
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/internal/mocks"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 func TestApplyResult(t *testing.T) {

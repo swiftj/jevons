@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/johnswift/jevons/internal/config"
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/internal/config"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 // InspectBytes is the number of leading bytes (after trimming leading

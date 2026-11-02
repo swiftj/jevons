@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 // Compile-time interface checks.

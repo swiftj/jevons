@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 // NewDesktopNotifier returns a schema.Notifier for the current platform:

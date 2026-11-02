@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/johnswift/jevons/internal/client"
-	"github.com/johnswift/jevons/internal/config"
-	"github.com/johnswift/jevons/internal/mocks"
-	"github.com/johnswift/jevons/internal/proxy"
-	"github.com/johnswift/jevons/pkg/schema"
+	"github.com/swiftj/jevons/internal/client"
+	"github.com/swiftj/jevons/internal/config"
+	"github.com/swiftj/jevons/internal/mocks"
+	"github.com/swiftj/jevons/internal/proxy"
+	"github.com/swiftj/jevons/pkg/schema"
 )
 
 // seqRunner returns scripted results in order and records requests.

@@ -44,7 +44,7 @@ Implements `schema.Classifier` by calling the Anthropic Messages API directly wi
 ### Request
 - `POST {AnthropicBaseURL}/v1/messages`, headers `x-api-key` (from `os.Getenv(cfg.APIKeyEnv)`),
   `anthropic-version: 2023-06-01`, `content-type: application/json`.
-- `model = cfg.ClassifierModel`, `max_tokens = 200`, `temperature = 0`.
+- `model = cfg.ClassifierModel`, `max_tokens = 200`. Do **not** send `temperature`: current models reject it with a 400.
 - Minimal system prompt (constant in `prompt.go`) instructing the model to reply with **only**
   a JSON object `{"task_tier","effort_level","rationale"}` using the tier rubric:
   - `TIER_1`: mechanical edits, formatting, lookups, short factual answers.

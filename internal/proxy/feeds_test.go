@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnswift/jevons/internal/mocks"
+	"github.com/swiftj/jevons/internal/mocks"
 )
 
 var feedNow = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)

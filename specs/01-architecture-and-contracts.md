@@ -39,7 +39,7 @@ The upgrade adds six capabilities, each mapped to a package:
 └── pkg/schema/                 # Shared types + interfaces                   (Wave 1)
 ```
 
-Module path: `github.com/johnswift/jevons` (confirm before Wave 1). `go 1.22` directive.
+Module path: `github.com/swiftj/jevons` (confirm before Wave 1). `go 1.22` directive.
 
 ## 3. Shared Types — `pkg/schema/types.go`
 

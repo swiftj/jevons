@@ -92,4 +92,4 @@ golangci-lint v2 config enabling: `errcheck`, `govet`, `staticcheck`, `ineffassi
 1. **Usage source for 5h/7d windows** — resolved: clients report tokens via `POST /usage` into
    `router.CountingUsage`; capacities come from config (`0` disables throttling for a window).
    Sessions are reported via `POST /session`. Reading Anthropic's own usage data is future work.
-2. **Module path** — `github.com/johnswift/jevons` (resolved).
+2. **Module path** — `github.com/swiftj/jevons` (resolved).

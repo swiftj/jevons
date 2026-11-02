@@ -1,4 +1,4 @@
-# Install, update and uninstall
+# Install, update, turn off and uninstall
 
 Jev ships as one binary, `jev`, published on
 [GitHub Releases](https://github.com/swiftj/jevons/releases). macOS gets a single universal
@@ -158,7 +158,7 @@ launchctl bootout gui/$(id -u)/com.github.swiftj.jev-router
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.github.swiftj.jev-router.plist
 ```
 
-`jev install` rewrites the plist, so add the edit again after re-running it.
+`jev off` followed by `jev on` also reloads it. `jev install` rewrites the plist, so add the edit again after re-running it.
 
 ## Run in the foreground instead
 
@@ -169,12 +169,116 @@ from your shell:
 jev router
 ```
 
+## Turn Jev off and on
+
+To stop using Jev for a while without uninstalling it:
+
+```bash
+jev off
+```
+
+This does three things:
+
+1. **Stops the daemon** (`launchctl bootout`).
+2. **Keeps it from starting at login** (`launchctl disable`). It stays off across restarts
+   until you turn it back on.
+3. **Silences the Claude Code hook.** It writes the marker file `~/.jev/off`. While that file
+   exists, `jev hook` routes nothing and prints nothing, and the status line reads `Jev: off`.
+   Claude Code works exactly as it would without Jev.
+
+Your keys, the launchd agent file, the Claude Code settings and the binary all stay in place.
+To turn it back on:
+
+```bash
+jev on
+```
+
+This removes `~/.jev/off`, re-enables the login agent, starts the daemon and waits for it to
+answer. If the agent was never installed, it tells you to run `jev install`.
+
+To see where things stand:
+
+```bash
+jev status
+```
+
+```
+✓ jev          on
+✓ login agent  com.github.swiftj.jev-router loaded
+✓ daemon       answering at 127.0.0.1:8942
+```
+
+After `jev off` the three lines read `off; run jev on to turn it back on`,
+`stopped by jev off` and `stopped by jev off`. `jev status` is a quick, offline subset of
+`jev doctor`. It always exits 0, so use `jev doctor` in scripts that need a failure code.
+
+Some other commands also take Jev out of the off state:
+
+- `jev install` always turns Jev on. It removes the marker and re-enables the agent before it
+  loads it.
+- `jev uninstall` removes the marker and launchd's disabled setting, so a later install starts
+  clean.
+- `jev update` replaces the binary but leaves Jev off. It restarts the daemon only if it was
+  running.
+
+On Linux there is no launchd agent. `jev off` and `jev on` only write and remove the marker,
+so stop or start `jev router` yourself.
+
 ## Uninstall
 
 ```bash
 jev uninstall
 ```
 
-This stops the daemon and removes the launchd agent. It removes Jev's hook and status line
-from Claude Code settings after asking, then deletes `~/.local/bin/jev` and `jev.prev`. Add
-`-purge` to also delete the keychain item and `~/.jev`. Add `-yes` to skip the question.
+This removes Jev but keeps your keys and history:
+
+1. Stops the daemon, removes the launchd agent file and clears any `jev off` setting.
+2. Shows the hook and status line entries it will take out of `~/.claude/settings.json` and
+   asks before removing them. Your other settings stay.
+3. Deletes `~/.local/bin/jev` and the previous version kept by `jev update`, `jev.prev`.
+
+What stays: both keychain items (`jev-pro` and `jev-pro-typesafe`), `~/.jev` (the daemon log,
+run logs and hook state) and `settings.json.jev-backup`. Reinstalling picks up the stored keys
+without asking.
+
+To remove everything, add `-purge`:
+
+```bash
+jev uninstall -purge
+```
+
+This also deletes both keychain items and the whole `~/.jev` directory. Your API keys
+themselves are untouched. Only Jev's copies in the keychain go.
+
+| Flag | Meaning |
+|------|---------|
+| `-purge` | Also delete both keychain items and `~/.jev`. |
+| `-yes` | Don't ask before editing Claude Code settings. |
+| `-bin-dir DIR` | Uninstall from somewhere other than `~/.local/bin`. |
+
+If you'd rather keep Jev installed but not running, use [`jev off`](#turn-jev-off-and-on).
+
+**If `jev` is already gone** (deleted by hand), clean up the rest manually:
+
+```bash
+launchctl bootout gui/$(id -u)/com.github.swiftj.jev-router
+```
+
+```bash
+rm ~/Library/LaunchAgents/com.github.swiftj.jev-router.plist
+```
+
+```bash
+security delete-generic-password -s jev-pro
+```
+
+```bash
+security delete-generic-password -s jev-pro-typesafe
+```
+
+```bash
+rm -rf ~/.jev
+```
+
+Then remove the `jev hook` entry under `hooks.UserPromptSubmit` and the `jev statusline`
+`statusLine` from `~/.claude/settings.json`.

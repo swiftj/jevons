@@ -27,6 +27,7 @@ type fakeHost struct {
 	stdin     []string
 	keys      map[string]bool // keychain service -> item present
 	loaded    bool
+	disabled  bool              // launchctl disable override
 	versionOf map[string]string // binary path -> `version` output
 }
 
@@ -59,10 +60,19 @@ func (f *fakeHost) exec(_ context.Context, stdin io.Reader, name string, args ..
 		}
 		return nil, errors.New("not loaded")
 	case name == launchctl && args[0] == "bootstrap":
+		if f.disabled {
+			return nil, errors.New("Bootstrap failed: 5: Input/output error")
+		}
 		f.loaded = true
 		return nil, nil
 	case name == launchctl && args[0] == "bootout":
 		f.loaded = false
+		return nil, nil
+	case name == launchctl && args[0] == "disable":
+		f.disabled = true
+		return nil, nil
+	case name == launchctl && args[0] == "enable":
+		f.disabled = false
 		return nil, nil
 	case name == launchctl:
 		return nil, nil

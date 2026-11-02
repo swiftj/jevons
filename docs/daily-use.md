@@ -72,6 +72,7 @@ are actually using:
 | `Jev ✓ Tier 1` | You're already on the suggested model. |
 | `Jev → Tier 1 (claude-haiku-5-5) · now Tier 3` | Jev suggests Tier 1, and you're on Tier 3. Switch with `/model` if you agree. |
 | `Jev: –` | No suggestion yet for this session, or the daemon is not running. |
+| `Jev: off` | Jev is turned off with `jev off`. Nothing is routed until `jev on`. |
 
 The status line command can only be one command. If you already have a status line script,
 call `jev statusline` from it and pass its stdin along.
@@ -86,6 +87,30 @@ goes through as normal. Any other problem is written to stderr (you see it in ve
 and also lets the prompt through. The hook stores only the tier, model and source for each
 session, never the prompt. That data sits in `~/.jev/hook/` (mode 0600), and files older than
 7 days are pruned.
+
+## Turning Jev off for a while
+
+```bash
+jev off
+```
+
+This stops the daemon, keeps it from starting at login, and makes the hook do nothing. The
+status line shows `Jev: off`, and Claude Code behaves as if Jev weren't installed. Nothing is
+removed. To turn it back on:
+
+```bash
+jev on
+```
+
+To check which state you're in:
+
+```bash
+jev status
+```
+
+`jev run` still works while Jev is off. With `-route` it finds no daemon, says so on stderr,
+and runs on the Tier 2 model. For the details, and for removing Jev completely, see
+[Install](install.md#turn-jev-off-and-on).
 
 ## Headless runs with jev run
 
@@ -140,6 +165,14 @@ Throttling stays off until you set `capacity_5h` and/or `capacity_7d` (see
 daemon restarts.
 
 ## Checking what Jev is doing
+
+For a quick answer to "is it on and running?":
+
+```bash
+jev status
+```
+
+For the details:
 
 ```bash
 curl -s 127.0.0.1:8942/status

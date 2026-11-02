@@ -17,7 +17,7 @@ import (
 	"github.com/swiftj/jevons/internal/setup"
 )
 
-// runSetup handles install, update, doctor, and uninstall.
+// runSetup handles install, update, doctor, uninstall, on, off, and status.
 func runSetup(ctx context.Context, cmd string, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 	fs := flag.NewFlagSet("jev "+cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -55,24 +55,33 @@ func runSetup(ctx context.Context, cmd string, args []string, stdin io.Reader, s
 		err = env.Update(ctx, setup.UpdateOptions{CheckOnly: check, Force: force})
 	case "uninstall":
 		err = env.Uninstall(ctx, setup.UninstallOptions{Yes: yes, Purge: purge})
+	case "on":
+		err = env.On(ctx)
+	case "off":
+		err = env.Off(ctx)
 	case "doctor":
-		failed := 0
-		for _, c := range env.Doctor(ctx, !offline) {
-			mark := "✓"
-			if !c.OK {
-				mark, failed = "✗", failed+1
-			}
-			fmt.Fprintf(stdout, "%s %-12s %s\n", mark, c.Name, c.Detail)
-		}
-		if failed > 0 {
-			return 1, nil
-		}
+		return printChecks(stdout, env.Doctor(ctx, !offline)), nil
+	case "status":
+		printChecks(stdout, env.Status(ctx))
 		return 0, nil
 	}
 	if err != nil {
 		return 1, err
 	}
 	return 0, nil
+}
+
+// printChecks prints one line per check and returns 1 if any failed.
+func printChecks(stdout io.Writer, cs []setup.Check) int {
+	code := 0
+	for _, c := range cs {
+		mark := "✓"
+		if !c.OK {
+			mark, code = "✗", 1
+		}
+		fmt.Fprintf(stdout, "%s %-12s %s\n", mark, c.Name, c.Detail)
+	}
+	return code
 }
 
 // newSetupEnv builds a setup.Env for this machine.

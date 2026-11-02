@@ -6,9 +6,12 @@
 jev doctor
 ```
 
-It checks the installed binary, `PATH`, whether a newer release exists, the keychain key, the
-launchd agent, the daemon, recent classifier failures and the Claude Code wiring. Each line is
-`✓` or `✗` with what to do next. It exits 1 if anything fails. `-offline` skips the GitHub check.
+It checks the installed binary, `PATH`, whether a newer release exists, both keychain keys,
+whether Jev is turned off, the launchd agent, the daemon, recent classifier failures and the
+Claude Code wiring. Each line is `✓` or `✗` with what to do next. It exits 1 if anything
+fails. `-offline` skips the GitHub check.
+
+For just "is it on and running?", `jev status` is quicker and doesn't go online.
 
 ## Where to look
 
@@ -20,11 +23,15 @@ launchd agent, the daemon, recent classifier failures and the Claude Code wiring
 | Per-run logs (`jev run`) | `~/.jev/logs/*.log`, newest last |
 | Hook state | `~/.jev/hook/<session_id>.json` |
 | launchd state | `launchctl print gui/$(id -u)/com.github.swiftj.jev-router` |
+| Turned off? | `jev status`, or whether `~/.jev/off` exists |
 
 None of these logs contain prompt text or model output. They record lengths, IDs, latency and
 status only.
 
 ## Common problems
+
+**The status line shows `Jev: off`, or the daemon doesn't come back after a restart.**
+Jev was turned off with `jev off`, which keeps it off across logins. Run `jev on`.
 
 **The status line shows `Jev: –` and no message appears when I submit a prompt.**
 The daemon isn't reachable. The hook stays silent rather than block you. Check `healthz`, then

@@ -27,7 +27,7 @@ headless `claude -p` runner, and a loopback telemetry server for Claude Mods.
 
 | Task | Command |
 |------|---------|
-| Build | `make build` → `bin/jev` (one binary: `router`, `run`, `hook`, `statusline`, `install`, `update`, `doctor`, `uninstall`) |
+| Build | `make build` → `bin/jev` (one binary: `router`, `run`, `hook`, `statusline`, `install`, `update`, `doctor`, `on`, `off`, `status`, `uninstall`) |
 | Test (race) | `make test` |
 | Lint | `make lint` (golangci-lint v2) |
 | Full gate | `make check` (vet + lint + race tests) |

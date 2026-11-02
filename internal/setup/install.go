@@ -194,6 +194,9 @@ func (e *Env) Uninstall(ctx context.Context, opt UninstallOptions) error {
 		}
 	}
 	e.step(true, "removed %s", e.Target())
+	if err := os.Remove(e.OffMarker()); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("setup: %w", err)
+	}
 	if !opt.Purge {
 		return nil
 	}

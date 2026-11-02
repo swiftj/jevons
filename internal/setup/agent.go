@@ -60,15 +60,19 @@ func (e *Env) InstallAgent(ctx context.Context) error {
 		return err
 	}
 	_, _ = e.Exec(ctx, nil, launchctl, "bootout", e.service()) // not loaded yet is fine
-	if _, err := e.Exec(ctx, nil, launchctl, "bootstrap", e.domain(), e.AgentPlist()); err != nil {
-		return fmt.Errorf("setup: load agent: %w", err)
+	// Installing turns Jev on: clear a `jev off`, whose disable would make
+	// bootstrap fail.
+	if err := os.Remove(e.OffMarker()); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("setup: %w", err)
 	}
-	return nil
+	return e.startAgent(ctx)
 }
 
-// RemoveAgent unloads the agent and deletes its plist.
+// RemoveAgent unloads the agent, clears any `jev off` override, and deletes
+// its plist.
 func (e *Env) RemoveAgent(ctx context.Context) error {
 	_, _ = e.Exec(ctx, nil, launchctl, "bootout", e.service()) // already unloaded is fine
+	_, _ = e.Exec(ctx, nil, launchctl, "enable", e.service())  // drop the disabled override launchd keeps
 	if err := os.Remove(e.AgentPlist()); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("setup: %w", err)
 	}

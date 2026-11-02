@@ -24,7 +24,12 @@ Setup:
   install     install jev, store the API key, start the daemon at login, wire Claude Code
   update      replace jev with the latest GitHub release (-check to only look)
   doctor      check every part of the setup
-  uninstall   remove the daemon, Claude Code wiring and binary (-purge: key and ~/.jev too)
+  uninstall   remove the daemon, Claude Code wiring and binary (-purge: keys and ~/.jev too)
+
+On/off:
+  off         pause jev: stop the daemon, keep it off at login, silence the hook
+  on          turn jev back on after "jev off"
+  status      show whether jev is on and the daemon is running
 
 Use:
   router      run the routing daemon (normally started by launchd)
@@ -68,7 +73,7 @@ func dispatch(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return runHook(ctx, rest, stdin, stdout, stderr)
 	case "statusline":
 		return runHook(ctx, append([]string{"-statusline"}, rest...), stdin, stdout, stderr)
-	case "install", "update", "doctor", "uninstall":
+	case "install", "update", "doctor", "uninstall", "on", "off", "status":
 		return runSetup(ctx, cmd, rest, stdin, stdout, stderr)
 	case "version", "-version", "--version":
 		fmt.Fprintln(stdout, version)

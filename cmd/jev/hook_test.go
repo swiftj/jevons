@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/swiftj/jevons/internal/config"
+	"github.com/swiftj/jevons/internal/setup"
 	"github.com/swiftj/jevons/pkg/schema"
 )
 
@@ -192,5 +193,27 @@ func TestFlagsAndConfig(t *testing.T) {
 	}
 	if got := tierLabel("weird"); got != "weird" {
 		t.Errorf("tierLabel = %q", got)
+	}
+}
+
+func TestHookOff(t *testing.T) {
+	jevDir := t.TempDir()
+	t.Setenv("JEV_LOG_DIR", filepath.Join(jevDir, "logs"))
+	if err := os.WriteFile(filepath.Join(jevDir, setup.OffFile), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	addr, calls := fakeDaemon(t, testConfig(t).Models[schema.Tier1])
+	stateDir := t.TempDir()
+
+	code, out, err := hookCmd(t, []string{"-addr", addr, "-state-dir", stateDir}, `{"session_id":"sess-1","prompt":"hi"}`)
+	if code != 0 || err != nil || out != "" {
+		t.Errorf("hook: code=%d err=%v out=%q", code, err, out)
+	}
+	if calls.Load() != 0 {
+		t.Errorf("routed %d prompts while off", calls.Load())
+	}
+	code, out, err = hookCmd(t, []string{"-statusline", "-state-dir", stateDir}, `{"session_id":"sess-1"}`)
+	if code != 0 || err != nil || out != "Jev: off\n" {
+		t.Errorf("statusline: code=%d err=%v out=%q", code, err, out)
 	}
 }

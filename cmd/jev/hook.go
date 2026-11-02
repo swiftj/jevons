@@ -4,7 +4,8 @@
 // model. Hooks cannot switch models, so it only advises.
 //
 // It never blocks a prompt: any failure (daemon down, bad input) exits 0
-// with no output.
+// with no output. After `jev off` it routes nothing and the status line
+// reads "Jev: off".
 
 package main
 
@@ -24,6 +25,7 @@ import (
 
 	"github.com/swiftj/jevons/internal/client"
 	"github.com/swiftj/jevons/internal/config"
+	"github.com/swiftj/jevons/internal/setup"
 	"github.com/swiftj/jevons/pkg/schema"
 )
 
@@ -78,17 +80,27 @@ func runHook(ctx context.Context, args []string, stdin io.Reader, stdout, stderr
 	if *addr != "" {
 		cfg.ListenAddr = *addr
 	}
+	jevDir := filepath.Dir(cfg.LogDir)
 	if *stateDir == "" {
-		*stateDir = filepath.Join(filepath.Dir(cfg.LogDir), "hook")
+		*stateDir = filepath.Join(jevDir, "hook")
 	}
+	// `jev off` leaves the hook installed; it just stays out of the way.
+	_, offErr := os.Stat(filepath.Join(jevDir, setup.OffFile))
+	off := offErr == nil
 
 	var in hookInput
 	if err := json.NewDecoder(io.LimitReader(stdin, maxInputBytes)).Decode(&in); err != nil {
 		return 0, fmt.Errorf("read hook input: %w", err)
 	}
 
-	if *statusline {
+	switch {
+	case *statusline && off:
+		fmt.Fprintln(stdout, "Jev: off")
+		return 0, nil
+	case *statusline:
 		fmt.Fprintln(stdout, statusText(readSuggestion(*stateDir, in.SessionID), in.Model.ID, cfg))
+		return 0, nil
+	case off:
 		return 0, nil
 	}
 	return 0, promptHook(ctx, in, cfg, *stateDir, *timeout, stdout)

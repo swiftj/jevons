@@ -46,11 +46,24 @@ Update later with `jev update`. Run skills headlessly with:
 jev run -skill=/cleanup -prompt="tidy the README" -route
 ```
 
+**Turning it off and removing it:**
+
+| Command | What it does |
+|---------|--------------|
+| `jev off` | Pause Jev. Stops the daemon, keeps it off at login and silences the hook. Keys and settings stay. |
+| `jev on` | Turn Jev back on. |
+| `jev status` | Show whether Jev is on and the daemon is answering. |
+| `jev uninstall` | Remove the daemon, the Claude Code wiring and the binary. Keys and `~/.jev` stay. |
+| `jev uninstall -purge` | Also delete both keychain items and `~/.jev`. |
+
+See [Turn Jev off and on](docs/install.md#turn-jev-off-and-on) and
+[Uninstall](docs/install.md#uninstall).
+
 ## Documentation
 
 | Page | Covers |
 |------|--------|
-| [Install, update and uninstall](docs/install.md) | One-line install, `jev install` / `update` / `uninstall`, keychain, launchd, verifying releases |
+| [Install, update, turn off and uninstall](docs/install.md) | One-line install, `jev install` / `update` / `off` / `on` / `status` / `uninstall`, keychain, launchd, verifying releases |
 | [Daily use](docs/daily-use.md) | How tiers are chosen, Claude Code hook and status line, `jev run`, feeding usage |
 | [Configuration](docs/configuration.md) | Config file, `JEV_*` variables, flags, choosing capacities |
 | [Daemon API](docs/endpoints.md) | Endpoints, decision and status formats, error codes |

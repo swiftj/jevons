@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,6 +32,8 @@ func TestDispatch(t *testing.T) {
 		{"run needs skill", []string{"run"}, "", 2, "", true},
 		{"router bad flag", []string{"router", "-nope"}, "", 1, "", true},
 		{"install bad flag", []string{"install", "-nope"}, "", 2, "", true},
+		{"off bad flag", []string{"off", "-nope"}, "", 2, "", true},
+		{"help lists on/off", []string{"help"}, "", 0, "off         pause jev", false},
 		{"update bad config", []string{"update", "-config", "/does/not/exist.json"}, "", 1, "", true},
 	}
 	for _, tc := range cases {
@@ -80,5 +83,35 @@ func TestPromptHelpers(t *testing.T) {
 	}
 	if env.Confirm("first?") || !env.Confirm("second?") {
 		t.Error("Confirm: n should be no, empty should be yes")
+	}
+}
+
+// TestStatusReportsOff runs `jev status` against a temp home. on and off are
+// not run here: on macOS they would drive the real launchd agent.
+func TestStatusReportsOff(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close() // free the port so connections are refused
+	t.Setenv("JEV_LISTEN_ADDR", addr)
+	if err := os.MkdirAll(filepath.Join(home, ".jev"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".jev", "off"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	code, err := dispatch(context.Background(), []string{"status"}, strings.NewReader(""), &out, &errOut)
+	if code != 0 || err != nil {
+		t.Fatalf("code=%d err=%v", code, err)
+	}
+	for _, want := range []string{"✗ jev ", "run `jev on`", "✗ daemon       stopped by `jev off`"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("missing %q:\n%s", want, out.String())
+		}
 	}
 }

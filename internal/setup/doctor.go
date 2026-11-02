@@ -52,15 +52,26 @@ func (e *Env) Doctor(ctx context.Context, online bool) []Check {
 				add(k.Name, false, "not set; "+k.Missing+". Run `jev install`")
 			}
 		}
-		if e.AgentLoaded(ctx) {
+	}
+	off := e.IsOff()
+	if off {
+		add("on/off", false, "off; run `jev on` to turn it back on")
+	}
+	if e.darwin() {
+		switch {
+		case e.AgentLoaded(ctx):
 			add("login agent", true, AgentLabel+" loaded")
-		} else {
+		case off:
+			add("login agent", false, "stopped by `jev off`")
+		default:
 			add("login agent", false, "not loaded; run `jev install`")
 		}
 	}
 
 	st, err := e.daemonStatus(ctx)
 	switch {
+	case err != nil && off:
+		add("daemon", false, "stopped by `jev off`")
 	case err != nil:
 		add("daemon", false, "not answering at "+e.DaemonAddr+"; see "+filepath.Join(e.JevDir(), "jev-router.log"))
 	case st.ClassifierErrors > 0:

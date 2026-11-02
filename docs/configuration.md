@@ -56,6 +56,7 @@ will talk to the wrong port or mislabel tiers.
 | `jev update` | `-check`, `-force` | See [Install](install.md#update). |
 | `jev doctor` | `-offline` | Skip the GitHub release check. |
 | `jev uninstall` | `-yes`, `-purge` | See [Install](install.md#uninstall). |
+| `jev on` / `jev off` / `jev status` | none of their own | See [Install](install.md#turn-jev-off-and-on). |
 | setup commands | `-bin-dir` | Where `jev` is installed (default `$JEV_BIN_DIR`, else `~/.local/bin`). |
 
 `jev statusline` is shorthand for `jev hook -statusline`. `jev version` prints the version.
